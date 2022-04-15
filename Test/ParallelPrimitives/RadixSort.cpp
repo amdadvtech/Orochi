@@ -67,8 +67,6 @@ RadixSort::RadixSort()
 {
 	m_flags = (Flag)0;
 
-	compileKernels();
-
 	if( selectedScanAlgo == ScanAlgo::SCAN_GPU_PARALLEL )
 	{
 		OrochiUtils::malloc( m_partialSum, m_nWGsToExecute );
@@ -86,28 +84,28 @@ RadixSort::~RadixSort()
 	}
 }
 
-void RadixSort::compileKernels()
+void RadixSort::compileKernels( oroDevice device )
 {
 	constexpr auto kernelPath{ "../Test/ParallelPrimitives/RadixSortKernels.h" };
 
 	printf( "compiling kernels ... \n" );
 
-	oroFunctions[Kernel::COUNT] = OrochiUtils::getFunctionFromFile( kernelPath, "CountKernel", 0 );
+	oroFunctions[Kernel::COUNT] = OrochiUtils::getFunctionFromFile( device, kernelPath, "CountKernel", 0 );
 	if( m_flags & FLAG_LOG ) RadixSortImpl::printKernelInfo( oroFunctions[Kernel::COUNT] );
 
-	oroFunctions[Kernel::COUNT_REF] = OrochiUtils::getFunctionFromFile( kernelPath, "CountKernelReference", 0 );
+	oroFunctions[Kernel::COUNT_REF] = OrochiUtils::getFunctionFromFile( device, kernelPath, "CountKernelReference", 0 );
 	if( m_flags & FLAG_LOG ) RadixSortImpl::printKernelInfo( oroFunctions[Kernel::COUNT_REF] );
 
-	oroFunctions[Kernel::SCAN_SINGLE_WG] = OrochiUtils::getFunctionFromFile( kernelPath, "ParallelExclusiveScanSingleWG", 0 );
+	oroFunctions[Kernel::SCAN_SINGLE_WG] = OrochiUtils::getFunctionFromFile( device, kernelPath, "ParallelExclusiveScanSingleWG", 0 );
 	if( m_flags & FLAG_LOG ) RadixSortImpl::printKernelInfo( oroFunctions[Kernel::SCAN_SINGLE_WG] );
 
-	oroFunctions[Kernel::SCAN_PARALLEL] = OrochiUtils::getFunctionFromFile( kernelPath, "ParallelExclusiveScanAllWG", 0 );
+	oroFunctions[Kernel::SCAN_PARALLEL] = OrochiUtils::getFunctionFromFile( device, kernelPath, "ParallelExclusiveScanAllWG", 0 );
 	if( m_flags & FLAG_LOG ) RadixSortImpl::printKernelInfo( oroFunctions[Kernel::SCAN_PARALLEL] );
 
-	oroFunctions[Kernel::SORT] = OrochiUtils::getFunctionFromFile( kernelPath, "SortKernel2", 0 );
+	oroFunctions[Kernel::SORT] = OrochiUtils::getFunctionFromFile( device, kernelPath, "SortKernel2", 0 );
 	if( m_flags & FLAG_LOG ) RadixSortImpl::printKernelInfo( oroFunctions[Kernel::SORT] );
 
-	oroFunctions[Kernel::SORT_REF] = OrochiUtils::getFunctionFromFile( kernelPath, "SortKernelReference", 0 );
+	oroFunctions[Kernel::SORT_REF] = OrochiUtils::getFunctionFromFile( device, kernelPath, "SortKernelReference", 0 );
 	if( m_flags & FLAG_LOG ) RadixSortImpl::printKernelInfo( oroFunctions[Kernel::SORT_REF] );
 }
 
@@ -130,6 +128,8 @@ void RadixSort::configure( oroDevice device, u32& tempBufferSizeOut )
 
 	m_nWGsToExecute = newWGsToExecute;
 	tempBufferSizeOut = BIN_SIZE * m_nWGsToExecute;
+
+	compileKernels( device );
 }
 void RadixSort::setFlag( Flag flag ) { m_flags = flag; }
 

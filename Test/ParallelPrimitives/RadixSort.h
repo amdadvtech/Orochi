@@ -35,7 +35,7 @@ class RadixSort
   private:
 	void sort1pass( u32* src, u32* dst, int n, int startBit, int endBit, int* tmps );
 
-	void compileKernels();
+	void compileKernels( oroDevice device );
 
   private:
 	int m_nWGsToExecute{ 4 };
