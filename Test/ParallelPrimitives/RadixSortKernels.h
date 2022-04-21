@@ -264,15 +264,53 @@ __device__ void ldsScanInclusive( T* lds, int width )
 template<typename T>
 __device__ T ldsScanExclusive( T* lds, int width )
 {
-	ldsScanInclusive( lds, width );
+	__shared__ T sum;
 
-	const T sum = lds[width - 1];
+	int offset = 1;
 
-	T tmp = 0;
-	tmp = ( threadIdx.x == 0 ) ? 0 : lds[threadIdx.x - 1];
+	for( int d = width >> 1; d > 0; d >>= 1 )
+	{
+		if( threadIdx.x < d )
+		{
+			const int firstInputIndex = offset * ( 2 * threadIdx.x + 1 ) - 1;
+			const int secondInputIndex = offset * ( 2 * threadIdx.x + 2 ) - 1;
+
+			lds[secondInputIndex] += lds[firstInputIndex];
+
+			__threadfence_block();
+		}
+
+		offset *= 2;
+	}
+
 	LDS_BARRIER;
 
-	lds[threadIdx.x] = tmp;
+	if( threadIdx.x == 0 )
+	{
+		sum = lds[width - 1];
+		__threadfence_block();
+
+		lds[width - 1] = 0;
+		__threadfence_block();
+	}
+
+	for( int d = 1; d < width; d *= 2 )
+	{
+		offset >>= 1;
+
+		if( threadIdx.x < d )
+		{
+			const int firstInputIndex = offset * ( 2 * threadIdx.x + 1 ) - 1;
+			const int secondInputIndex = offset * ( 2 * threadIdx.x + 2 ) - 1;
+
+			T t = lds[firstInputIndex];
+			lds[firstInputIndex] = lds[secondInputIndex];
+			lds[secondInputIndex] += t;
+
+			__threadfence_block();
+		}
+	}
+
 	LDS_BARRIER;
 
 	return sum;
