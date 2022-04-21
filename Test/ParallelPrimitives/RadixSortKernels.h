@@ -270,15 +270,15 @@ __device__ T ldsScanExclusive( T* lds, int width )
 
 	for( int d = width >> 1; d > 0; d >>= 1 )
 	{
+
 		if( threadIdx.x < d )
 		{
 			const int firstInputIndex = offset * ( 2 * threadIdx.x + 1 ) - 1;
 			const int secondInputIndex = offset * ( 2 * threadIdx.x + 2 ) - 1;
 
 			lds[secondInputIndex] += lds[firstInputIndex];
-
-			__threadfence_block();
 		}
+		LDS_BARRIER;
 
 		offset *= 2;
 	}
@@ -303,19 +303,17 @@ __device__ T ldsScanExclusive( T* lds, int width )
 			const int firstInputIndex = offset * ( 2 * threadIdx.x + 1 ) - 1;
 			const int secondInputIndex = offset * ( 2 * threadIdx.x + 2 ) - 1;
 
-			T t = lds[firstInputIndex];
+			const T t = lds[firstInputIndex];
 			lds[firstInputIndex] = lds[secondInputIndex];
 			lds[secondInputIndex] += t;
-
-			__threadfence_block();
 		}
+		LDS_BARRIER;
 	}
 
 	LDS_BARRIER;
 
 	return sum;
 }
-
 //========================
 
 __device__ void localSort4bitMultiRef( int* keys, u32* ldsKeys, const int START_BIT )
@@ -623,11 +621,12 @@ extern "C" __global__ void ParallelExclusiveScanSingleWG( int* gCount, int* gHis
 	// Do parallel exclusive scan on the LDS
 
 	int globalSum = 0;
-	for( int binId = 0; binId < BIN_SIZE; binId += WG_SIZE )
+	for( int binId = 0; binId < BIN_SIZE; binId += WG_SIZE * 2 )
 	{
 		int* globalOffset = &blockBuffer[binId];
-		int currentGlobalSum = ldsScanExclusive( globalOffset, WG_SIZE );
-		globalOffset[threadIdx.x] += globalSum;
+		int currentGlobalSum = ldsScanExclusive( globalOffset, WG_SIZE * 2 );
+		globalOffset[threadIdx.x * 2] += globalSum;
+		globalOffset[threadIdx.x * 2 + 1] += globalSum;
 		globalSum += currentGlobalSum;
 	}
 
