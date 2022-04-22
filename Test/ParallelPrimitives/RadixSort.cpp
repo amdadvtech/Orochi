@@ -90,22 +90,26 @@ void RadixSort::compileKernels( oroDevice device )
 
 	printf( "compiling kernels ... \n" );
 
-	oroFunctions[Kernel::COUNT] = OrochiUtils::getFunctionFromFile( device, kernelPath, "CountKernel", 0 );
+	std::vector<const char*> opts;
+//	opts.push_back( "--save-temps" );
+	opts.push_back( "-I ../" );
+
+	oroFunctions[Kernel::COUNT] = OrochiUtils::getFunctionFromFile( device, kernelPath, "CountKernel", &opts );
 	if( m_flags & FLAG_LOG ) RadixSortImpl::printKernelInfo( oroFunctions[Kernel::COUNT] );
 
-	oroFunctions[Kernel::COUNT_REF] = OrochiUtils::getFunctionFromFile( device, kernelPath, "CountKernelReference", 0 );
+	oroFunctions[Kernel::COUNT_REF] = OrochiUtils::getFunctionFromFile( device, kernelPath, "CountKernelReference", &opts );
 	if( m_flags & FLAG_LOG ) RadixSortImpl::printKernelInfo( oroFunctions[Kernel::COUNT_REF] );
 
-	oroFunctions[Kernel::SCAN_SINGLE_WG] = OrochiUtils::getFunctionFromFile( device, kernelPath, "ParallelExclusiveScanSingleWG", 0 );
+	oroFunctions[Kernel::SCAN_SINGLE_WG] = OrochiUtils::getFunctionFromFile( device, kernelPath, "ParallelExclusiveScanSingleWG", &opts );
 	if( m_flags & FLAG_LOG ) RadixSortImpl::printKernelInfo( oroFunctions[Kernel::SCAN_SINGLE_WG] );
 
-	oroFunctions[Kernel::SCAN_PARALLEL] = OrochiUtils::getFunctionFromFile( device, kernelPath, "ParallelExclusiveScanAllWG", 0 );
+	oroFunctions[Kernel::SCAN_PARALLEL] = OrochiUtils::getFunctionFromFile( device, kernelPath, "ParallelExclusiveScanAllWG", &opts );
 	if( m_flags & FLAG_LOG ) RadixSortImpl::printKernelInfo( oroFunctions[Kernel::SCAN_PARALLEL] );
 
-	oroFunctions[Kernel::SORT] = OrochiUtils::getFunctionFromFile( device, kernelPath, "SortKernel2", 0 );
+	oroFunctions[Kernel::SORT] = OrochiUtils::getFunctionFromFile( device, kernelPath, "SortKernel", &opts );
 	if( m_flags & FLAG_LOG ) RadixSortImpl::printKernelInfo( oroFunctions[Kernel::SORT] );
 
-	oroFunctions[Kernel::SORT_REF] = OrochiUtils::getFunctionFromFile( device, kernelPath, "SortKernelReference", 0 );
+	oroFunctions[Kernel::SORT_REF] = OrochiUtils::getFunctionFromFile( device, kernelPath, "SortKernelReference", &opts );
 	if( m_flags & FLAG_LOG ) RadixSortImpl::printKernelInfo( oroFunctions[Kernel::SORT_REF] );
 }
 
@@ -113,7 +117,7 @@ void RadixSort::configure( oroDevice device, u32& tempBufferSizeOut )
 {
 	oroDeviceProp props;
 	oroGetDeviceProperties( &props, device );
-	const int occupancy = 2; // todo. change me
+	const int occupancy = 16; // todo. change me
 
 	const auto newWGsToExecute{ props.multiProcessorCount * occupancy };
 
@@ -172,7 +176,6 @@ void RadixSort::sort1pass( u32* src, u32* dst, int n, int startBit, int endBit, 
 		const auto func{ reference ? oroFunctions[Kernel::COUNT_REF] : oroFunctions[Kernel::COUNT] };
 		const void* args[] = { &src, &temps, &n, &nItemsPerWI, &startBit, &m_nWGsToExecute };
 		OrochiUtils::launch1D( func, WG_SIZE * m_nWGsToExecute, args, WG_SIZE );
-		//		OrochiUtils::waitForCompletion();
 	}
 
 	{
@@ -208,7 +211,6 @@ void RadixSort::sort1pass( u32* src, u32* dst, int n, int startBit, int endBit, 
 		const auto func{ reference ? oroFunctions[Kernel::SORT_REF] : oroFunctions[Kernel::SORT] };
 		const void* args[] = { &src, &dst, &temps, &n, &nItemsPerWI, &startBit, &m_nWGsToExecute };
 		OrochiUtils::launch1D( func, WG_SIZE * m_nWGsToExecute, args, WG_SIZE );
-		//		OrochiUtils::waitForCompletion();
 	}
 }
 

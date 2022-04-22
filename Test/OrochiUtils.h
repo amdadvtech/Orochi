@@ -1,6 +1,8 @@
 #pragma once
 #include <Orochi/Orochi.h>
 #include <vector>
+#include <map>
+#include <string>
 
 #define OROASSERT(x, y) if(!(x)) {__debugbreak();}
 
@@ -24,21 +26,22 @@ class OrochiUtils
 		OROASSERT( e == oroSuccess, 0 );
 	}
 
-	static void free( void* ptr ) { oroFree( (oroDeviceptr)ptr ); }
+	template<typename T>
+	static void free( T* ptr ) { oroFree( (oroDeviceptr)ptr ); }
 
 	static void memset( void* ptr, int val, int n ) { oroMemset( (oroDeviceptr)ptr, val, n ); }
 
 	template<typename T>
 	static void copyHtoD( T* dst, T* src, int n )
 	{
-		oroError e = oroMemcpyHtoD( (oroDeviceptr)dst, src, sizeof( T ) * n );
+		oroError e = oroMemcpyHtoD( (oroDeviceptr)dst, (void*)src, sizeof( T ) * n );
 		OROASSERT( e == oroSuccess, 0 );
 	}
 
 	template<typename T>
 	static void copyDtoH( T* dst, T* src, int n )
 	{
-		oroError e = oroMemcpyDtoH( dst, (oroDeviceptr)src, sizeof( T ) * n );
+		oroError e = oroMemcpyDtoH( (void*)dst, (oroDeviceptr)src, sizeof( T ) * n );
 		OROASSERT( e == oroSuccess, 0 );
 	}
 
@@ -58,4 +61,5 @@ class OrochiUtils
 
 public:
 	static char* s_cacheDirectory;
+	static std::map<std::string, oroFunction> s_kernelMap;
 };

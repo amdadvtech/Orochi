@@ -110,7 +110,7 @@ class FileStat
 struct OrochiUtilsImpl
 {
 	static
-	void readSourceCode( const std::string& path, std::string& sourceCode, std::vector<std::string>* includes )
+	bool readSourceCode( const std::string& path, std::string& sourceCode, std::vector<std::string>* includes )
 	{
 		std::fstream f( path );
 		if( f.is_open() )
@@ -148,7 +148,9 @@ struct OrochiUtilsImpl
 				f.read( &sourceCode[0], size );
 			}
 			f.close();
+			return true;
 		}
+		return false;
 	}
 
 	static void getCacheFileName( oroDevice device, const char* moduleName, const char* functionName, const char* options, std::string& binFileName )
@@ -240,7 +242,7 @@ struct OrochiUtilsImpl
 
 	static bool createDirectory( const char* cacheDirName )
 	{
-#if defined( WIN32 )
+#if defined( _WIN32 )
 		std::wstring cacheDirNameW = utf8_to_wstring( cacheDirName );
 		bool error = CreateDirectoryW( cacheDirNameW.c_str(), 0 );
 		if( error == false && GetLastError() != ERROR_ALREADY_EXISTS )
@@ -287,7 +289,7 @@ struct OrochiUtilsImpl
 		long long checksumValue = 0;
 		{
 			const std::string csFileName = getCheckSumFileName( cacheName );
-#if defined( WIN32 )
+#if defined( _WIN32 )
 			std::wstring csFileNameW = utf8_to_wstring( csFileName );
 			FILE* csfile = _wfopen( csFileNameW.c_str(), L"rb" );
 #else
@@ -302,7 +304,7 @@ struct OrochiUtilsImpl
 
 		if( checksumValue == 0 ) return 0;
 
-#if defined( WIN32 )
+#if defined( _WIN32 )
 		std::wstring binaryFileNameW = utf8_to_wstring( cacheName );
 		FILE* file = _wfopen( binaryFileNameW.c_str(), L"rb" );
 #else
@@ -368,59 +370,45 @@ struct OrochiUtilsImpl
 		}
 		return 0;
 	}
+
+	static std::string getCacheName( const char* path, const char* kernelname )
+	{
+		std::string a( path );
+		a += kernelname;
+		return a;
+	}
 };
 
 char* OrochiUtils::s_cacheDirectory = "./cache/";
+std::map<std::string, oroFunction> OrochiUtils::s_kernelMap;
 
 oroFunction OrochiUtils::getFunctionFromFile( oroDevice device, const char* path, const char* funcName, std::vector<const char*>* optsIn )
 { 
-	std::string source;
-	OrochiUtilsImpl::readSourceCode( path, source, 0 );
-
-	return getFunction( device, source.c_str(), path, funcName, optsIn );
-/*
-	const char* code = source.c_str();
-	oroFunction function;
-
-	orortcProgram prog;
-	orortcResult e;
-	e = orortcCreateProgram( &prog, code, path, 0, 0, 0 );
-	std::vector<const char*> opts;
-	opts.push_back( "-I ../" );
-	opts.push_back( "-G" );
-
-	e = orortcCompileProgram( prog, opts.size(), opts.data() );
-	if( e != ORORTC_SUCCESS )
+	std::string cacheName = OrochiUtilsImpl::getCacheName( path, funcName );
+	if( s_kernelMap.find( cacheName.c_str() ) != s_kernelMap.end() )
 	{
-		size_t logSize;
-		orortcGetProgramLogSize( prog, &logSize );
-		if( logSize )
-		{
-			std::string log( logSize, '\0' );
-			orortcGetProgramLog( prog, &log[0] );
-			std::cout << log << '\n';
-		};
+		return s_kernelMap[ cacheName ];
 	}
-	size_t codeSize;
-	e = orortcGetCodeSize( prog, &codeSize );
 
-	std::vector<char> codec( codeSize );
-	e = orortcGetCode( prog, codec.data() );
-	e = orortcDestroyProgram( &prog );
-	oroModule module;
-	oroError ee = oroModuleLoadData( &module, codec.data() );
-	ee = oroModuleGetFunction( &function, module, funcName );
+	std::string source;
+	if( !OrochiUtilsImpl::readSourceCode( path, source, 0 ) )
+		return 0;
 
-	return function;
-*/
+	oroFunction f = getFunction( device, source.c_str(), path, funcName, optsIn );
+	s_kernelMap[cacheName] = f;
+	return f;
 }
 
 oroFunction OrochiUtils::getFunction( oroDevice device, const char* code, const char* path, const char* funcName, std::vector<const char*>* optsIn )
 {
 	std::vector<const char*> opts;
-	opts.push_back( "-I ../" );
 	opts.push_back( "-std=c++14" );
 
+	if( optsIn )
+	{
+		for( int i = 0; i < optsIn->size(); i++ )
+			opts.push_back( ( *optsIn )[i] );
+	}
 	//	if( oroGetCurAPI(0) == ORO_API_CUDA )
 	//		opts.push_back( "-G" );
 
@@ -428,7 +416,12 @@ oroFunction OrochiUtils::getFunction( oroDevice device, const char* code, const 
 	std::vector<char> codec;
 
 	std::string cacheFile;
-	OrochiUtilsImpl::getCacheFileName( device, path, funcName, 0, cacheFile );
+	{
+		std::string o;
+		for(int i=0; i<opts.size(); i++)
+			o.append( opts[i] );
+		OrochiUtilsImpl::getCacheFileName( device, path, funcName, o.c_str(), cacheFile );
+	}
 	if( OrochiUtilsImpl::isFileUpToDate( cacheFile.c_str(), path ) )
 	{
 		//load cache

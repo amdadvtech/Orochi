@@ -91,7 +91,9 @@ class SortTest
 			m_sort->sort( srcGpu, dstGpu, testSize, 0, testBits, m_tempBuffer );
 			OrochiUtils::waitForCompletion();
 			sw.stop();
-			printf("%3.2fms\n", sw.getMs());
+			float ms = sw.getMs();
+			float gKeys_s = testSize/1000.f/1000.f/ms;
+			printf("%3.2fms (%3.2fGKeys/s) sorting %3.1fMkeys\n", ms, gKeys_s, testSize/1000.f/1000.f);
 		}
 
 		vector<u32> dst( testSize );
@@ -137,7 +139,7 @@ enum TestType
 
 int main(int argc, char** argv )
 {
-	TestType testType = TEST_BITS;
+	TestType testType = TEST_PERF;
 	oroApi api = getApiType( argc, argv );
 
 	int a = oroInitialize( api, 0 );
@@ -165,24 +167,25 @@ int main(int argc, char** argv )
 	}
 
 	SortTest sort( device, ctx );
-	const int testBits = 16;
+	const int testBits = 32;
 	switch( testType )
 	{
 	case TEST_SIMPLE:
 		sort.test( 64 * 100, testBits );
 		break;
 	case TEST_PERF:
-		sort.test( 64 * 100 * 10, testBits );
-		sort.test( 64 * 100 * 100, testBits );
-		sort.test( 64 * 100 * 1000, testBits );
+		sort.test( 16 * 1000 * 10, testBits );
+		sort.test( 16 * 1000 * 100, testBits );
+		sort.test( 16 * 1000 * 1000, testBits );
 		break;
 	case TEST_BITS:
 	{
-		int testSize = 64*1000;
-		sort.test( testSize, 8 );
-		sort.test( testSize, 16 );
-		sort.test( testSize, 24 );
-		sort.test( testSize, 32 );
+		const int nRuns = 2;
+		int testSize = 16*1000*1000;
+		sort.test( testSize, 8, nRuns );
+		sort.test( testSize, 16, nRuns );
+		sort.test( testSize, 24, nRuns );
+		sort.test( testSize, 32, nRuns );
 	}
 		break;
 	};
