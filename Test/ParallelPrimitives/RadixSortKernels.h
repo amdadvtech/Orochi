@@ -460,7 +460,7 @@ __device__ void localSort8bitMulti( int* keys, u32* ldsKeys, const int START_BIT
 	if( N_RADIX > 4 ) localSort4bitMulti( keys, ldsKeys, START_BIT + 4 );
 }
 
-extern "C" __global__ void SortKernel2( int* gSrc, int* gDst, int* gHistogram, int gN, int gNItemsPerWI, const int START_BIT, const int N_WGS_EXECUTED )
+extern "C" __global__ void SortKernel( int* gSrc, int* gDst, int* gHistogram, int gN, int gNItemsPerWI, const int START_BIT, const int N_WGS_EXECUTED )
 {
 	const int gIdx = blockIdx.x * blockDim.x + threadIdx.x;
 	int offset = blockIdx.x * blockDim.x * gNItemsPerWI;
@@ -576,6 +576,91 @@ extern "C" __global__ void SortKernel2( int* gSrc, int* gDst, int* gHistogram, i
 		{
 			int idx = threadIdx.x * N_BINS_PER_WI + i;
 			localOffsets[idx] += histogram[i];
+		}
+		//===
+		offset += WG_SIZE * SORT_N_ITEMS_PER_WI;
+	}
+}
+
+extern "C" __global__ void SortKernel1( int* gSrc, int* gDst, int* gHistogram, int gN, int gNItemsPerWI, const int START_BIT, const int N_WGS_EXECUTED )
+{
+	const int gIdx = blockIdx.x * blockDim.x + threadIdx.x;
+	int offset = blockIdx.x * blockDim.x * gNItemsPerWI;
+	const int wgIdx = blockIdx.x;
+
+	__shared__ u32 localOffsets[BIN_SIZE];
+
+	__shared__ u32 ldsKeys[WG_SIZE * SORT_N_ITEMS_PER_WI]; // todo. can be aliased
+
+	__shared__ union
+	{
+		u16 histogram[2][BIN_SIZE]; // low and high// todo. can be aliased
+		u32 histogramU32[BIN_SIZE];
+	} lds;
+
+	int keys[SORT_N_ITEMS_PER_WI] = { 0 };
+
+	for( int i = threadIdx.x; i < BIN_SIZE; i += WG_SIZE )
+	{
+		localOffsets[i] = gHistogram[i * N_WGS_EXECUTED + wgIdx];
+	}
+	LDS_BARRIER;
+
+	for( int ii = 0; ii < gNItemsPerWI; ii += SORT_N_ITEMS_PER_WI )
+	{
+		for( int i = 0; i < SORT_N_ITEMS_PER_WI; i++ )
+		{
+			int idx = offset + threadIdx.x * SORT_N_ITEMS_PER_WI + i;
+			keys[i] = ( idx < gN ) ? gSrc[idx] : 0xffffffff;
+		}
+
+		// local sort keys[];
+		localSort8bitMulti( keys, ldsKeys, START_BIT );
+#if 0
+		if( THE_FIRST_THREAD )
+		{
+			for( int i = 0; i < WG_SIZE * SORT_N_ITEMS_PER_WI ; i++)
+				printf("%d,", ldsKeys[i]);
+			printf("\n");
+		}
+		break;
+#endif
+		for( int i = threadIdx.x; i < BIN_SIZE; i += WG_SIZE )
+			lds.histogramU32[i] = 0;
+		LDS_BARRIER;
+
+		for( int i = 0; i < SORT_N_ITEMS_PER_WI; i++ )
+		{
+			int a = threadIdx.x * SORT_N_ITEMS_PER_WI + i;
+			int b = a - 1;
+			int aa = ( ldsKeys[a] >> START_BIT ) & RADIX_MASK;
+			int bb = ( ( ( b >= 0 ) ? ldsKeys[b] : 0xffffffff ) >> START_BIT ) & RADIX_MASK;
+			if( aa != bb )
+			{
+				lds.histogram[0][aa] = a;
+				if( b >= 0 ) lds.histogram[1][bb] = a;
+			}
+		}
+		if( threadIdx.x == 0 ) lds.histogram[1][( ldsKeys[SORT_N_ITEMS_PER_WI * WG_SIZE - 1] >> START_BIT ) & RADIX_MASK] = SORT_N_ITEMS_PER_WI * WG_SIZE;
+
+		LDS_BARRIER;
+
+		for( int i = 0; i < SORT_N_ITEMS_PER_WI; i++ )
+		{
+			int idx = offset + threadIdx.x * SORT_N_ITEMS_PER_WI + i;
+			if( idx < gN )
+			{
+				int tableIdx = ( keys[i] >> START_BIT ) & RADIX_MASK;
+				int dstIdx = localOffsets[tableIdx] + ( threadIdx.x * SORT_N_ITEMS_PER_WI + i ) - lds.histogram[0][tableIdx];
+				gDst[dstIdx] = keys[i];
+			}
+		}
+		LDS_BARRIER;
+
+		for( int i = 0; i < N_BINS_PER_WI; i++ )
+		{
+			int idx = threadIdx.x * N_BINS_PER_WI + i;
+			localOffsets[idx] += lds.histogram[1][idx] - lds.histogram[0][idx];
 		}
 		//===
 		offset += WG_SIZE * SORT_N_ITEMS_PER_WI;

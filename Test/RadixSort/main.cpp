@@ -28,7 +28,9 @@
 #include <Test/ParallelPrimitives/RadixSortConfigs.h>
 #include <algorithm>
 #include <vector>
-
+#if 1
+#include <Test/Stopwatch.h>
+#else
 #include <chrono>
 
 class Stopwatch
@@ -45,7 +47,7 @@ class Stopwatch
 	  std::chrono::time_point<std::chrono::system_clock> m_start, m_end;
 
 };
-
+#endif
 #define u64 unsigned long long
 #define u32 unsigned int
 
@@ -139,7 +141,7 @@ enum TestType
 
 int main(int argc, char** argv )
 {
-	TestType testType = TEST_PERF;
+	TestType testType = TEST_BITS;
 	oroApi api = getApiType( argc, argv );
 
 	int a = oroInitialize( api, 0 );
@@ -167,11 +169,11 @@ int main(int argc, char** argv )
 	}
 
 	SortTest sort( device, ctx );
-	const int testBits = 32;
+	const int testBits = 8*2;
 	switch( testType )
 	{
 	case TEST_SIMPLE:
-		sort.test( 64 * 100, testBits );
+		sort.test( 16 * 1000 * 100, testBits );
 		break;
 	case TEST_PERF:
 		sort.test( 16 * 1000 * 10, testBits );
