@@ -141,7 +141,7 @@ enum TestType
 
 int main(int argc, char** argv )
 {
-	TestType testType = TEST_BITS;
+	TestType testType = TEST_PERF;
 	oroApi api = getApiType( argc, argv );
 
 	int a = oroInitialize( api, 0 );
@@ -169,7 +169,7 @@ int main(int argc, char** argv )
 	}
 
 	SortTest sort( device, ctx );
-	const int testBits = 8*2;
+	const int testBits = 32;
 	switch( testType )
 	{
 	case TEST_SIMPLE:
