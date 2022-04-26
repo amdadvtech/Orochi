@@ -209,7 +209,7 @@ void RadixSort::sort1pass( u32* src, u32* dst, int n, int startBit, int endBit, 
 		case ScanAlgo::SCAN_GPU_PARALLEL:
 		{
 			const void* args[] = { &temps, &temps, &m_partialSum, &m_isReady };
-			OrochiUtils::launch1D( oroFunctions[Kernel::SCAN_PARALLEL], WG_SIZE * m_nWGsToExecute, args, WG_SIZE );
+			OrochiUtils::launch1D( oroFunctions[Kernel::SCAN_PARALLEL], SCAN_WG_SIZE * m_nWGsToExecute, args, SCAN_WG_SIZE );
 		}
 		break;
 

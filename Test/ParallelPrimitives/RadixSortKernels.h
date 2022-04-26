@@ -763,35 +763,16 @@ extern "C" __device__ void WorkgroupSync( int threadId, int blockId, int current
 
 extern "C" __global__ void ParallelExclusiveScanAllWG( int* gCount, int* gHistogram, volatile int* gPartialSum, volatile bool* gIsReady )
 {
-	// Fill the private memory per WI
-
-	int privateBuffer[NUM_COUNTS_PER_WI];
-	for( int i = 0; i < NUM_COUNTS_PER_WI; ++i )
-	{
-		privateBuffer[i] = gCount[( blockIdx.x * blockDim.x + threadIdx.x ) * NUM_COUNTS_PER_WI + i];
-	}
-
-	// Do exclusive scan for each segment handled by each WI in all WGs
-
-	int localThreadSum = 0;
-	for( int i = 0; i < NUM_COUNTS_PER_WI; ++i )
-	{
-		int current = privateBuffer[i];
-		privateBuffer[i] = localThreadSum;
-
-		localThreadSum += current;
-	}
-
 	// Fill the LDS with the partial sum of each segment
-	__shared__ int blockBuffer[WG_SIZE];
+	__shared__ int blockBuffer[SCAN_WG_SIZE];
 
-	blockBuffer[threadIdx.x] = localThreadSum;
+	blockBuffer[threadIdx.x] = gCount[blockIdx.x * blockDim.x + threadIdx.x];
 
 	LDS_BARRIER;
 
 	// Do parallel exclusive scan on the LDS
 
-	int currentSegmentSum = ldsScanExclusive( blockBuffer, WG_SIZE );
+	int currentSegmentSum = ldsScanExclusive( blockBuffer, SCAN_WG_SIZE );
 
 	LDS_BARRIER;
 
@@ -802,9 +783,5 @@ extern "C" __global__ void ParallelExclusiveScanAllWG( int* gCount, int* gHistog
 
 	// Write back the result.
 
-	for( int i = 0; i < NUM_COUNTS_PER_WI; ++i )
-	{
-		const int currentIndex = ( blockIdx.x * blockDim.x + threadIdx.x ) * NUM_COUNTS_PER_WI + i;
-		gHistogram[currentIndex] = privateBuffer[i] + blockBuffer[threadIdx.x] + currentGlobalOffset;
-	}
+	gHistogram[blockIdx.x * blockDim.x + threadIdx.x] = blockBuffer[threadIdx.x] + currentGlobalOffset;
 }
