@@ -48,7 +48,8 @@ class RadixSort
 		SCAN_SINGLE_WG,
 		SCAN_PARALLEL,
 		SORT,
-		SORT_REF
+		SORT_REF,
+		SORT_SINGLE_PASS
 	};
 
 	std::unordered_map<Kernel, oroFunction> oroFunctions;

@@ -17,6 +17,8 @@ constexpr auto N_BINS_PACKED_4BIT{ N_BINS_4BIT / N_BINS_PACK_FACTOR };
 
 // sort configs
 constexpr auto SORT_N_ITEMS_PER_WI{ 12 };
+constexpr auto SINGLE_SORT_N_ITEMS_PER_WI{ 12 };
+constexpr auto SINGLE_SORT_WG_SIZE{ 128 };
 
 // scan configs
 constexpr auto SCAN_WG_SIZE{ BIN_SIZE };

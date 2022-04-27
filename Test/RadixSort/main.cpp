@@ -134,6 +134,7 @@ class SortTest
 
 enum TestType
 {
+	TEST_SINGLE,// test single kernel sort
 	TEST_SIMPLE,
 	TEST_PERF,
 	TEST_BITS,
@@ -172,13 +173,21 @@ int main(int argc, char** argv )
 	const int testBits = 32;
 	switch( testType )
 	{
+	case TEST_SINGLE:
+	{
+		sort.test( 128*10, testBits, 10 );
+	}
+		break;
 	case TEST_SIMPLE:
 		sort.test( 16 * 1000 * 100, testBits );
 		break;
 	case TEST_PERF:
-		sort.test( 16 * 1000 * 10, testBits );
-		sort.test( 16 * 1000 * 100, testBits );
-		sort.test( 16 * 1000 * 1000, testBits );
+	{
+		const int nRuns = 4;
+		sort.test( 16 * 1000 * 10, testBits, nRuns );
+		sort.test( 16 * 1000 * 100, testBits, nRuns );
+		sort.test( 16 * 1000 * 1000, testBits, nRuns );
+	}
 		break;
 	case TEST_BITS:
 	{

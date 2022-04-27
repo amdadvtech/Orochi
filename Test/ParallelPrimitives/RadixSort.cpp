@@ -4,7 +4,7 @@
 #include <numeric>
 #include <Test/Stopwatch.h>
 
-#define PROFILE 1
+//#define PROFILE 1
 
 namespace
 {
@@ -115,13 +115,16 @@ void RadixSort::compileKernels( oroDevice device )
 
 	oroFunctions[Kernel::SORT_REF] = OrochiUtils::getFunctionFromFile( device, kernelPath, "SortKernelReference", &opts );
 	if( m_flags & FLAG_LOG ) RadixSortImpl::printKernelInfo( oroFunctions[Kernel::SORT_REF] );
+
+	oroFunctions[Kernel::SORT_SINGLE_PASS] = OrochiUtils::getFunctionFromFile( device, kernelPath, "SortSinglePassKernel", &opts );
+	if( m_flags & FLAG_LOG ) RadixSortImpl::printKernelInfo( oroFunctions[Kernel::SORT_SINGLE_PASS] );
 }
 
 void RadixSort::configure( oroDevice device, u32& tempBufferSizeOut )
 {
 	oroDeviceProp props;
 	oroGetDeviceProperties( &props, device );
-	const int occupancy = 16; // todo. change me
+	const int occupancy = 8; // todo. change me
 
 	const auto newWGsToExecute{ props.multiProcessorCount * occupancy };
 
@@ -145,6 +148,16 @@ void RadixSort::sort( u32* src, u32* dst, int n, int startBit, int endBit, u32* 
 {
 	u32* s = src;
 	u32* d = dst;
+
+	if( n < SINGLE_SORT_WG_SIZE*SINGLE_SORT_N_ITEMS_PER_WI ) //todo. what's the optimal value for SINGLE_SORT_N_ITEMS_PER_WI? there should be a tipping point where single one is inefficient
+	{//todo. implement a single pass, single WG sort
+		const auto func =  oroFunctions[Kernel::SORT_SINGLE_PASS];
+		const void* args[] = { &src, &dst, &n, &startBit, &endBit };
+		OrochiUtils::launch1D( func, SINGLE_SORT_WG_SIZE, args, SINGLE_SORT_WG_SIZE );
+		OrochiUtils::waitForCompletion();
+		return;
+	}
+
 	for( int i = startBit; i < endBit; i += N_RADIX )
 	{
 		sort1pass( s, d, n, i, i + std::min( N_RADIX, endBit - i ), (int*)tempBuffer );
