@@ -21,6 +21,15 @@ constexpr auto useBitCode = true;
 constexpr auto useBitCode = false;
 #endif
 
+// todo. fix me for linux
+const HMODULE GetCurrentModule()
+{
+	HMODULE hModule = NULL;
+	// hModule is NULL if GetModuleHandleEx fails.
+	GetModuleHandleEx( GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)GetCurrentModule, &hModule );
+	return hModule;
+}
+
 void printKernelInfo( oroFunction func )
 {
 	int numReg{};
@@ -84,11 +93,23 @@ void RadixSort::compileKernels( oroDevice device, OrochiUtils& oroutils, const s
 	const auto currentKernelPath{ ( kernelPath == "" ) ? defaultKernelPath : kernelPath };
 	const auto currentIncludeDir{ ( includeDir == "" ) ? defaultIncludeDir : includeDir };
 
+	auto getCurrentDir = []()
+	{
+		// todo. fix me for linux
+
+		HMODULE hm = GetCurrentModule();
+		char buff[MAX_PATH];
+		GetModuleFileName( hm, buff, MAX_PATH );
+		std::string::size_type position = std::string( buff ).find_last_of( "\\/" );
+		return std::string( buff ).substr( 0, position ) + "/";
+	};
+
 	std::string binaryPath{};
 	if constexpr( useBitCode )
 	{
 		const bool isAmd = oroGetCurAPI( 0 ) == ORO_API_HIP;
-		binaryPath = isAmd ? "../bitcodes/oro_compiled_kernels.hipfb" : "../bitcodes/oro_compiled_kernels.fatbin";
+		binaryPath = getCurrentDir();
+		binaryPath += isAmd ? "oro_compiled_kernels.hipfb" : "oro_compiled_kernels.fatbin";
 		if( m_flags == Flag::LOG )
 		{
 			std::cout << "loading pre-compiled kernels at path : " << binaryPath << '\n';
