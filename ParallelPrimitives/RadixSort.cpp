@@ -13,6 +13,10 @@
 // clang-format on
 #endif
 
+#if defined(__GNUC__)
+#include <dlfcn.h>
+#endif
+
 namespace
 {
 #if defined( ORO_PRECOMPILED )
@@ -21,7 +25,7 @@ constexpr auto useBitCode = true;
 constexpr auto useBitCode = false;
 #endif
 
-// todo. fix me for linux
+#if !defined(__GNUC__)
 const HMODULE GetCurrentModule()
 {
 	HMODULE hModule = NULL;
@@ -29,6 +33,13 @@ const HMODULE GetCurrentModule()
 	GetModuleHandleEx( GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)GetCurrentModule, &hModule );
 	return hModule;
 }
+#else
+void GetCurrentModule1()
+{
+}
+#endif
+
+
 
 void printKernelInfo( oroFunction func )
 {
@@ -95,11 +106,15 @@ void RadixSort::compileKernels( oroDevice device, OrochiUtils& oroutils, const s
 
 	auto getCurrentDir = []()
 	{
-		// todo. fix me for linux
-
+#if !defined(__GNUC__)
 		HMODULE hm = GetCurrentModule();
 		char buff[MAX_PATH];
 		GetModuleFileName( hm, buff, MAX_PATH );
+#else
+		Dl_info info;
+		dladdr( (const void*)GetCurrentModule1, &info );
+		const char* buff = info.dli_fname;
+#endif	
 		std::string::size_type position = std::string( buff ).find_last_of( "\\/" );
 		return std::string( buff ).substr( 0, position ) + "/";
 	};
