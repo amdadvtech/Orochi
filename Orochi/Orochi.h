@@ -175,6 +175,13 @@ enum orortcResult
 	ORORTC_ERROR_LINKING = 100
 };
 
+typedef enum oroEvent_flags_enum
+{
+	oroEventDefault = 0x0,
+	oroEventBlockingSync = 0x1,
+	oroEventDisableTiming = 0x2,
+	oroEventInterprocess = 0x4,
+} oroEvent_flags;
 
 typedef enum oroDeviceAttribute {
   oroDeviceAttributeCudaCompatibleBegin = 0,

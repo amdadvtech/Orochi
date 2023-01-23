@@ -327,7 +327,7 @@ static int hipewHipInit(void) {
   HIP_LIBRARY_FIND_CHECKED(hipDeviceGet);
   HIP_LIBRARY_FIND_CHECKED(hipDeviceGetName);
   HIP_LIBRARY_FIND_CHECKED(hipDeviceGetAttribute);
-  HIP_LIBRARY_FIND_CHECKED(hipDeviceGetLimit);
+  HIP_LIBRARY_FIND( hipDeviceGetLimit );
   HIP_LIBRARY_FIND( hipDeviceSetLimit );
   HIP_LIBRARY_FIND_CHECKED(hipDeviceComputeCapability);
   HIP_LIBRARY_FIND_CHECKED(hipDevicePrimaryCtxRetain);
