@@ -13,7 +13,7 @@ ps = []
 def compile( index ):
 	if index == 0 :
 		command = [
-			"..\\..\\hiprt\\hipsdk\\bin\\hipcc",
+			"..\\..\\hipsdk\\bin\\hipcc",
 			"-x", "hip", "..\ParallelPrimitives\RadixSortKernels.h", "-O3", "-std=c++17", "-ffast-math", "--cuda-device-only", "--genco", "-I../", "-include", "hip/hip_runtime.h", "-parallel-jobs=15"]
 		#command.append( "--offload-arch=gfx1100" )
 		for i in getGpuList()['amd']:
