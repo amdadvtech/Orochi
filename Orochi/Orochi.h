@@ -762,6 +762,7 @@ enum {
 
 
 int oroInitialize( oroApi api, oroU32 flags );
+oroApi oroLoadedAPI();
 oroApi oroGetCurAPI( oroU32 flags );
 void* oroGetRawCtx( oroCtx ctx );
 oroError oroCtxCreateFromRaw( oroCtx* ctxOut, oroApi api, void* ctxIn );
