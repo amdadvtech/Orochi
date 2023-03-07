@@ -501,7 +501,7 @@ oroFunction OrochiUtils::getFunction( oroDevice device, const char* code, const 
 		OrochiUtilsImpl::cacheBinaryToFile( codec, cacheFile );
 	}
 	oroModule module;
-	oroError ee = oroModuleLoadData( &module, codec.data() );
+	oroError ee = oroModuleLoadData( &module, codec.data(), codec.size() );
 	OROASSERT( ee == oroSuccess, 0 );
 	ee = oroModuleGetFunction( &function, module, funcName );
 	OROASSERT( ee == oroSuccess, 0 );

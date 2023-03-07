@@ -30,7 +30,12 @@
 
 #if defined( ORO_INTEL )
 #include <ze_api.h>
+#include <fstream>
 //https://spec.oneapi.io/level-zero/latest/api.html
+
+const char* getTempFilePath() { return "__x.cl"; }
+const char* getCompiledFilePath() { return "__x_Gen12LPdg1.spv"; }
+std::string getCompiledPathPostfix() { return "_Gen12LPdg1.spv"; }
 #endif
 
 std::unordered_map<void*, oroCtx> s_oroCtxs;
@@ -45,6 +50,7 @@ struct IntelContext
 	ze_context_handle_t m_ctxt = 0;
 	ze_device_handle_t m_device = 0;
 	ze_command_list_handle_t m_cmdList = 0;
+	ze_command_queue_handle_t m_queue = 0;
 };
 
 static IntelContext s_iCtxt;
@@ -583,7 +589,6 @@ oroError OROAPI oroCtxDestroy(oroCtx ctx)
 #if defined( ORO_INTEL )
 	if( s_api == ORO_API_INTEL )
 	{
-		TODO( "oroCtxDestroy" );
 		auto e = zeContextDestroy( s_iCtxt.m_ctxt );
 		if( e != ZE_RESULT_SUCCESS ) return oroErrorUnknown;
 
@@ -807,6 +812,8 @@ oroError OROAPI oroMemcpyDtoH(void* dstHost, oroDeviceptr srcDevice, size_t Byte
 	{
 		auto e = zeCommandListAppendMemoryCopy( s_iCtxt.m_cmdList, dstHost, (const void*)srcDevice, ByteCount, 0, 0, 0 );
 		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		e = (ze_result_t)oroStreamSynchronize( (oroStream)s_iCtxt.m_queue );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
 		return oroSuccess;
 	}
 #endif
@@ -843,6 +850,8 @@ oroError OROAPI oroMemset(oroDeviceptr dstDevice, unsigned int ui, size_t N)
 	if( s_api == ORO_API_INTEL )
 	{
 		auto e = zeCommandListAppendMemoryFill( s_iCtxt.m_cmdList, (void*)dstDevice, &ui, sizeof( int ), N, 0, 0, 0 );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		e = (ze_result_t)oroStreamSynchronize( (oroStream)s_iCtxt.m_queue );
 		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
 		return oroSuccess;
 	}
@@ -974,18 +983,43 @@ orortcResult OROAPI orortcAddNameExpression( orortcProgram prog, const char* nam
 }
 orortcResult OROAPI orortcCompileProgram(orortcProgram prog, int numOptions, const char** options)
 {
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		std::string cmd = "ocloc -file " + std::string( getTempFilePath() );
+		cmd += " -device dg1";// -output " + std::string( getCompiledFilePath() );
+		system( cmd.c_str() );
+		return ORORTC_SUCCESS;
+	}
+#endif
 	__ORORTC_FUNC1( CompileProgram( (nvrtcProgram)prog, numOptions, options ),
 		CompileProgram( (hiprtcProgram)prog, numOptions, options ) );
 	return ORORTC_ERROR_INTERNAL_ERROR;
 }
 orortcResult OROAPI orortcCreateProgram(orortcProgram* prog, const char* src, const char* name, int numHeaders, const char** headers, const char** includeNames)
 {
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		std::ofstream file;
+		file.open( getTempFilePath() );
+		file << src;
+		file.close();
+		return ORORTC_SUCCESS;
+	}
+#endif
 	__ORORTC_FUNC1( CreateProgram( (nvrtcProgram*)prog, src, name, numHeaders, headers, includeNames ), 
 		CreateProgram( (hiprtcProgram*)prog, src, name, numHeaders, headers, includeNames ) );
 	return ORORTC_ERROR_INTERNAL_ERROR;
 }
 orortcResult OROAPI orortcDestroyProgram(orortcProgram* prog)
 {
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		return ORORTC_SUCCESS;
+	}
+#endif
 	__ORORTC_FUNC1( DestroyProgram( (nvrtcProgram*)prog), 
 		DestroyProgram( (hiprtcProgram*)prog ) );
 	return ORORTC_ERROR_INTERNAL_ERROR;
@@ -1021,12 +1055,38 @@ orortcResult OROAPI orortcGetBitcodeSize(orortcProgram prog, size_t* bitcodeSize
 }
 orortcResult OROAPI orortcGetCode(orortcProgram prog, char* code)
 {
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		std::ifstream f( getCompiledFilePath() );
+		const auto b = f.tellg();
+		f.seekg( 0, std::ios::end );
+		const auto e = f.tellg();
+		const auto s = e - b;
+		f.seekg( 0, std::ios::beg );
+		f.read( code, s );
+		f.close();
+		return ORORTC_SUCCESS;
+	}
+#endif
 	__ORORTC_FUNC1( GetPTX( (nvrtcProgram)prog, code ), 
 		GetCode( (hiprtcProgram)prog, code ) );
 	return ORORTC_ERROR_INTERNAL_ERROR;
 }
 orortcResult OROAPI orortcGetCodeSize(orortcProgram prog, size_t* codeSizeRet)
 {
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		std::ifstream f( getCompiledFilePath() );
+		const auto b = f.tellg();
+		f.seekg( 0, std::ios::end );
+		const auto e = f.tellg();
+		*codeSizeRet = e - b;
+		f.close();
+		return ORORTC_SUCCESS;
+	}
+#endif
 	__ORORTC_FUNC1( GetPTXSize( (nvrtcProgram)prog, codeSizeRet ), 
 		GetCodeSize( (hiprtcProgram)prog, codeSizeRet ) );
 	return ORORTC_ERROR_INTERNAL_ERROR;
@@ -1119,6 +1179,7 @@ oroError OROAPI oroStreamCreate( oroStream* stream )
 		cmdQueueDesc.mode = ZE_COMMAND_QUEUE_MODE_ASYNCHRONOUS;
 		e = zeCommandQueueCreate( s_iCtxt.m_ctxt, dev, &cmdQueueDesc, (ze_command_queue_handle_t*)stream );
 		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		s_iCtxt.m_queue = *(ze_command_queue_handle_t*)stream;
 
 		ze_command_list_handle_t command_list;
 		ze_command_list_desc_t cmdListDesc = {};
@@ -1140,7 +1201,7 @@ oroError OROAPI oroStreamSynchronize( oroStream hStream )
 #if defined( ORO_INTEL )
 	if( s_api == ORO_API_INTEL )
 	{
-		if( hStream == 0 ) return oroErrorUnknown;
+		if( hStream == 0 ) hStream = (oroStream)s_iCtxt.m_queue;
 		ze_command_queue_handle_t queue = (ze_command_queue_handle_t)hStream;
 		auto e = zeCommandListClose( s_iCtxt.m_cmdList );
 		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;

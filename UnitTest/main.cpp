@@ -96,7 +96,8 @@ TEST_F( OroTestBase, kernelExec )
 	int* a_device = nullptr;
 	OROCHECK( oroMalloc( (oroDeviceptr*)&a_device, sizeof( int ) ) );
 	OROCHECK( oroMemset( (oroDeviceptr)a_device, 0, sizeof( int ) ) );
-	oroFunction kernel = o.getFunctionFromFile( m_device, "../UnitTest/testKernel.h", "testKernel", 0 ); 
+	oroFunction kernel = o.getFunctionFromFile( m_device, 
+		( oroGetCurAPI( 0 ) != ORO_API_INTEL ) ? "../UnitTest/testKernel.h" : "../UnitTest/testKernel.cl", "testKernel", 0 ); 
 	const void* args[] = { &a_device };
 	OrochiUtils::launch1D( kernel, 64, args, 64 );
 	OrochiUtils::waitForCompletion();
@@ -134,7 +135,7 @@ TEST_F( OroTestBase, kernelExecPreCompiled )
 		loadFile( path.c_str(), binary );
 		oroFunction function;
 		oroModule module;
-		oroError ee = oroModuleLoadData( &module, binary.data() );
+		oroError ee = oroModuleLoadData( &module, binary.data(), binary.size() );
 		ee = oroModuleGetFunction( &function, module, "testKernel" );
 		int x = 123;
 		const void* args[] = { &x };
