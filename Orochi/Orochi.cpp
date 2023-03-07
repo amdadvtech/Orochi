@@ -28,10 +28,36 @@
 #include <unordered_map>
 #include <mutex>
 
+#if defined( ORO_INTEL )
+#include <ze_api.h>
+//https://spec.oneapi.io/level-zero/latest/api.html
+#endif
+
 std::unordered_map<void*, oroCtx> s_oroCtxs;
 static std::mutex mtx;
 thread_local static oroApi s_api = ORO_API_HIP;
 static oroU32 s_loadedApis = 0;
+#if defined( ORO_INTEL )
+static ze_driver_handle_t s_driver = 0;
+
+struct IntelContext
+{
+	ze_context_handle_t m_ctxt = 0;
+	ze_device_handle_t m_device = 0;
+	ze_command_list_handle_t m_cmdList = 0;
+};
+
+static IntelContext s_iCtxt;
+#endif
+
+
+
+static void todo(const char* txt) 
+{ 
+	printf( "todo: %s\n", txt );
+}
+
+#define TODO(x) todo( x );
 
 struct ioroCtx_t
 {
@@ -48,31 +74,43 @@ public:
 struct ioroDevice
 {
 private:
-	oroU32 m_api : 4;
-	oroU32 m_deviceIdx : 16;
+	oroU64 m_api : 6;
+	oroU64 m_deviceIdx : 57;
 
 public:
-	ioroDevice( int src = 0)
+	ioroDevice( oroU64 src = 0)
 	{
-		((int*)this)[0] = src;
+		((oroU64*)this)[0] = src;
 	}
 
 	oroApi getApi() const { return (oroApi)m_api; }
 	void setApi(oroApi api) { m_api = api; }
-	int getDevice() const { return m_deviceIdx; }
-	void setDevice( int d ) { m_deviceIdx = d; }
+	oroU64 getDevice() const { return m_deviceIdx; }
+	void setDevice( oroU64 d ) { m_deviceIdx = d; }
 };
 
 inline 
 oroApi getRawDeviceIndex( int& deviceId ) 
 {
-	int n[2] = { 0, 0 };
+	int n[3] = { 0, 0, 0 };
 	oroGetDeviceCount( &n[0], ORO_API_HIP );
 	oroGetDeviceCount( &n[1], ORO_API_CUDADRIVER );
+	oroGetDeviceCount( &n[2], ORO_API_INTEL );
 
-	oroApi api = (deviceId < n[0]) ? (ORO_API_HIP) : (ORO_API_CUDADRIVER);
+	oroApi api = ORO_API_HIP;
+	if( deviceId < n[0] )
+		api = ORO_API_HIP;
+	else if( deviceId < n[0] + n[1] )
+		api = ORO_API_CUDADRIVER;
+	else
+		api = ORO_API_INTEL;
+
 	if( api & ORO_API_CUDADRIVER )
 		deviceId -= n[0];
+#if defined( ORO_INTEL )
+	if( api & ORO_API_INTEL ) 
+		deviceId -= n[0] + n[1];
+#endif
 	return api;
 }
 
@@ -130,6 +168,17 @@ int oroInitialize( oroApi api, oroU32 flags )
 			s_loadedApis |= ORO_API_HIPRTC;
 		}
 	}
+#if defined( ORO_INTEL )
+	if( api & ORO_API_INTEL )
+	{
+		ze_result_t e;
+		e = zeInit( 0 );
+		if( e == ZE_RESULT_SUCCESS )
+		{
+			s_loadedApis |= ORO_API_INTEL;
+		}
+	}
+#endif
 	if( s_loadedApis == 0 )
 		return ORO_ERROR_OPEN_FAILED;
 	return ORO_SUCCESS;
@@ -203,14 +252,22 @@ hipCtx_t* oroCtx2hip( oroCtx* a )
 	ioroCtx_t* b = *a;
 	return (hipCtx_t*)&b->m_ptr;
 }
-inline
-orortcResult hiprtc2oro( hiprtcResult a )
+inline ze_context_handle_t* oroCtx2intel( oroCtx* a )
 {
+	ioroCtx_t* b = *a;
+	return (ze_context_handle_t*)&b->m_ptr;
+}
+inline ze_device_handle_t oroDevice2intel( oroU64 d ) 
+{ 
+	return (ze_device_handle_t)d;
+}
+inline orortcResult hiprtc2oro( hiprtcResult a ) {
 	return (orortcResult)a;
 }
 inline
 orortcResult nvrtc2oro( nvrtcResult a )
 {
+
 	return (orortcResult)a;
 }
 
@@ -260,6 +317,24 @@ oroError OROAPI oroInit(unsigned int Flags)
 	{
 		e1 = cu2oro( cuInit( Flags ) );
 	}
+#if defined( ORO_INTEL )
+	if( s_loadedApis & ORO_API_INTEL )
+	{
+		uint32_t driverCount = 0;
+		auto e = zeDriverGet( &driverCount, nullptr );
+		if( e == ZE_RESULT_SUCCESS )
+		{
+			std::vector<ze_driver_handle_t> drivers( driverCount );
+			e = zeDriverGet( &driverCount, drivers.data() );
+
+			if( e != ZE_RESULT_SUCCESS ) return oroErrorUnknown;
+			if( driverCount > 0 )
+				s_driver = drivers[0];
+		}
+		else
+			return oroErrorUnknown;
+	}
+#endif
 	return ( e0 == 0 || e1 == 0 ) ? oroSuccess : oroErrorUnknown;
 }
 
@@ -299,13 +374,21 @@ oroError OROAPI oroGetDeviceCount(int* count, oroApi iapi)
 		if( e == 0 )
 			*count += c;
 	}
+#if defined( ORO_INTEL )
+	if( ( api & s_loadedApis ) & ORO_API_INTEL )
+	{
+		uint32_t c = 0;
+		zeDeviceGet( s_driver, &c, nullptr );
+		*count += c;
+	}
+#endif
 	return oroSuccess;
 }
 
 oroError OROAPI oroGetDeviceProperties(oroDeviceProp* props, oroDevice dev)
 {
 	ioroDevice d( dev );
-	int deviceId = d.getDevice();
+	oroU64 deviceId = d.getDevice();
 	oroApi api = d.getApi();
 	if( api == ORO_API_HIP )
 		return hip2oro(hipGetDeviceProperties((hipDeviceProp_t*)props, deviceId));
@@ -340,6 +423,19 @@ oroError OROAPI oroGetDeviceProperties(oroDeviceProp* props, oroDevice dev)
 		e = cuDeviceGetAttribute( &props->ECCEnabled, CU_DEVICE_ATTRIBUTE_ECC_ENABLED, deviceId );
 		return oroSuccess;
 	}
+#if defined( ORO_INTEL )
+	if( api & ORO_API_INTEL )
+	{
+		ze_device_properties_t p = {};
+		p.stype = ZE_STRUCTURE_TYPE_DEVICE_PROPERTIES;
+		zeDeviceGetProperties( (ze_device_handle_t)deviceId, &p );
+		strcpy( props->name, p.name );
+		strcpy( props->gcnArchName, "" );
+		props->multiProcessorCount = p.numSlices * p.numSubslicesPerSlice * p.numEUsPerSubslice;
+
+		return oroSuccess;
+	}
+#endif
 	return oroErrorUnknown;
 }
 
@@ -366,6 +462,28 @@ oroError OROAPI oroDeviceGet(oroDevice* device, int ordinal )
 		*(ioroDevice*)device = d;
 		return cu2oro(e);
 	}
+#if defined( ORO_INTEL )
+	if( api & ORO_API_INTEL )
+	{
+		uint32_t deviceCount = 0;
+		zeDeviceGet( s_driver, &deviceCount, nullptr );
+		std::vector<ze_device_handle_t> devices( deviceCount );
+		zeDeviceGet( s_driver, &deviceCount, devices.data() );
+
+		auto dd = devices[ordinal];
+		ze_device_properties_t device_properties = {};
+		device_properties.stype = ZE_STRUCTURE_TYPE_DEVICE_PROPERTIES;
+		zeDeviceGetProperties( dd, &device_properties );
+		if( device_properties.type == ZE_DEVICE_TYPE_GPU )
+		{
+			d.setApi( api );
+			d.setDevice( (oroU64)dd );
+			*(ioroDevice*)device = d;
+			s_iCtxt.m_device = dd;
+			return oroSuccess;
+		}
+	}
+#endif
 	return oroErrorUnknown;
 }
 
@@ -435,6 +553,16 @@ oroError OROAPI oroCtxCreate(oroCtx* pctx, unsigned int flags, oroDevice dev)
 	int e = oroErrorUnknown;
 	if( s_api & ORO_API_CUDADRIVER ) e = cuCtxCreate( oroCtx2cu( pctx ), flags, d.getDevice() );
 	if( s_api == ORO_API_HIP ) e = hipCtxCreate( oroCtx2hip( pctx ), flags, d.getDevice() );
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		ze_context_handle_t context;
+		ze_context_desc_t context_desc = {};
+		context_desc.stype = ZE_STRUCTURE_TYPE_CONTEXT_DESC;
+		e = zeContextCreate( s_driver, &context_desc, oroCtx2intel( pctx ) );
+		s_iCtxt.m_ctxt = *oroCtx2intel( pctx );
+	}
+#endif
 	if( e )
 	{
 		__ORO_RET_ERR( e )
@@ -449,6 +577,16 @@ oroError OROAPI oroCtxDestroy(oroCtx ctx)
 	std::lock_guard<std::mutex> lock( mtx );
 	s_oroCtxs.erase( ctx->m_ptr );
 
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		TODO( "oroCtxDestroy" );
+		auto e = zeContextDestroy( s_iCtxt.m_ctxt );
+		if( e != ZE_RESULT_SUCCESS ) return oroErrorUnknown;
+
+		return oroSuccess;
+	}
+#endif
 	int e = 0;
 	if( s_api & ORO_API_CUDADRIVER ) e = cuCtxDestroy( *oroCtx2cu( &ctx ) );
 	if( s_api == ORO_API_HIP ) e = hipCtxDestroy( *oroCtx2hip( &ctx ) );
@@ -519,8 +657,26 @@ oroError OROAPI oroModuleLoad(oroModule* module, const char* fname)
 	__ORO_FUNC1( ModuleLoad( (CUmodule*)module, fname ), ModuleLoad( (hipModule_t*)module, fname ) );
 	return oroErrorUnknown;
 }
-oroError OROAPI oroModuleLoadData(oroModule* module, const void* image)
+oroError OROAPI oroModuleLoadData( oroModule* module, const void* image, unsigned int imageSize )
 {
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		if( imageSize == 0 ) return oroErrorUnknown;
+		ze_module_desc_t moduleDesc = {};
+		ze_module_build_log_handle_t buildLog;
+		moduleDesc.format = ZE_MODULE_FORMAT_IL_SPIRV;
+		moduleDesc.pInputModule = reinterpret_cast<const uint8_t*>( image );
+		moduleDesc.inputSize = imageSize;
+		moduleDesc.pBuildFlags = "";
+
+		auto status = zeModuleCreate( s_iCtxt.m_ctxt, s_iCtxt.m_device, &moduleDesc, (ze_module_handle_t*)module, &buildLog );
+		zeModuleBuildLogDestroy( buildLog );
+		if( status == ZE_RESULT_SUCCESS ) return oroSuccess;
+
+		return oroErrorUnknown;
+	}
+#endif
 	__ORO_FUNC1( ModuleLoadData( (CUmodule*)module, image ), ModuleLoadData( (hipModule_t*)module, image ) );
 	return oroErrorUnknown;
 }
@@ -532,11 +688,29 @@ oroError OROAPI oroModuleLoadDataEx(oroModule* module, const void* image, unsign
 }
 oroError OROAPI oroModuleUnload(oroModule module)
 {
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		auto e = zeModuleDestroy( (ze_module_handle_t)module );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		return oroSuccess;
+	}
+#endif
 	__ORO_FUNC1( ModuleUnload( (CUmodule)module ), ModuleUnload( (hipModule_t)module ) );
 	return oroErrorUnknown;
 }
 oroError OROAPI oroModuleGetFunction(oroFunction* hfunc, oroModule hmod, const char* name)
 {
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		ze_kernel_desc_t kernelDesc = {};
+		kernelDesc.pKernelName = name;
+		auto e = zeKernelCreate( (ze_module_handle_t)hmod, &kernelDesc, (ze_kernel_handle_t*)hfunc );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		return oroSuccess;
+	}
+#endif
 	__ORO_FUNC1( ModuleGetFunction( (CUfunction*)hfunc, (CUmodule)hmod, name ), 
 		ModuleGetFunction( (hipFunction_t*)hfunc, (hipModule_t)hmod, name ) );
 	return oroErrorUnknown;
@@ -554,6 +728,16 @@ oroError OROAPI oroMemGetInfo(size_t* free, size_t* total)
 }
 oroError OROAPI oroMalloc(oroDeviceptr* dptr, size_t bytesize)
 {
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		ze_device_mem_alloc_desc_t desc = { ZE_STRUCTURE_TYPE_DEVICE_MEM_ALLOC_DESC };
+		desc.ordinal = 0;
+		auto e = zeMemAllocDevice( s_iCtxt.m_ctxt, &desc, bytesize, 16, s_iCtxt.m_device, (void**)dptr );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		return oroSuccess;
+	}
+#endif
 	__ORO_FUNC1( MemAlloc((CUdeviceptr*)dptr, bytesize), Malloc( dptr, bytesize ) );
 	return oroErrorUnknown;
 }
@@ -568,6 +752,13 @@ oroError OROAPI oroMemAllocPitch(oroDeviceptr* dptr, size_t* pPitch, size_t Widt
 }
 oroError OROAPI oroFree(oroDeviceptr dptr)
 {
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		auto e = zeMemFree( s_iCtxt.m_ctxt, (void*)dptr );
+		return oroSuccess;
+	}
+#endif
 	__ORO_FUNC1( MemFree( dptr ), Free( dptr ) );
 	return oroErrorUnknown;
 }
@@ -608,6 +799,14 @@ oroError OROAPI oroMemcpyHtoD(oroDeviceptr dstDevice, void* srcHost, size_t Byte
 }
 oroError OROAPI oroMemcpyDtoH(void* dstHost, oroDeviceptr srcDevice, size_t ByteCount)
 {
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		auto e = zeCommandListAppendMemoryCopy( s_iCtxt.m_cmdList, dstHost, (const void*)srcDevice, ByteCount, 0, 0, 0 );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		return oroSuccess;
+	}
+#endif
 	__ORO_FUNC1( MemcpyDtoH( dstHost, srcDevice, ByteCount ),
 		MemcpyDtoH( dstHost, srcDevice, ByteCount ) );
 	return oroErrorUnknown;
@@ -637,6 +836,14 @@ oroError OROAPI oroMemcpyDtoDAsync( oroDeviceptr dstDevice, oroDeviceptr srcDevi
 }
 oroError OROAPI oroMemset(oroDeviceptr dstDevice, unsigned int ui, size_t N)
 {
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		auto e = zeCommandListAppendMemoryFill( s_iCtxt.m_cmdList, (void*)dstDevice, &ui, sizeof( int ), N, 0, 0, 0 );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		return oroSuccess;
+	}
+#endif
 	__ORO_FUNC1( MemsetD8( (CUdeviceptr)dstDevice, ui, N ), Memset((void*)dstDevice, ui, N));
 	return oroErrorUnknown;
 }
@@ -681,6 +888,31 @@ oroError OROAPI oroFuncGetAttribute( int* pi, oroFunction_attribute attrib, oroF
 
 oroError OROAPI oroModuleLaunchKernel(oroFunction f, unsigned int gridDimX, unsigned int gridDimY, unsigned int gridDimZ, unsigned int blockDimX, unsigned int blockDimY, unsigned int blockDimZ, unsigned int sharedMemBytes, oroStream hStream, void** kernelParams, void** extra)
 {
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		ze_kernel_handle_t kernel = (ze_kernel_handle_t)f;
+
+		ze_kernel_properties_t props = {};
+		auto e = zeKernelGetProperties( kernel, &props );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+
+		e = zeKernelSetGroupSize( kernel, blockDimX, blockDimY, blockDimZ );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		for(int i=0; i<props.numKernelArgs; i++)
+		{
+			e = zeKernelSetArgumentValue( kernel, i, sizeof( kernelParams[i] ), kernelParams[i] );
+			if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		}
+		ze_group_count_t dispatch;
+		dispatch.groupCountX = gridDimX;
+		dispatch.groupCountY = gridDimY;
+		dispatch.groupCountZ = gridDimZ;
+		e = zeCommandListAppendLaunchKernel( s_iCtxt.m_cmdList, kernel, &dispatch, nullptr, 0, nullptr );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		return oroSuccess;
+	}
+#endif
 	__ORO_FUNC1( LaunchKernel( (CUfunction)f, gridDimX, gridDimY, gridDimZ, blockDimX, blockDimY, blockDimZ, sharedMemBytes, (CUstream)hStream, kernelParams, extra ),
 		ModuleLaunchKernel( (hipFunction_t)f, gridDimX, gridDimY, gridDimZ, blockDimX, blockDimY, blockDimZ, sharedMemBytes, (hipStream_t)hStream, kernelParams, extra ) );
 	return oroErrorUnknown;
@@ -855,20 +1087,84 @@ oroError OROAPI oroPointerGetAttributes(oroPointerAttribute* attr, oroDeviceptr 
 }
 
 //-----------------
-oroError OROAPI oroStreamCreate(oroStream* stream)
+oroError OROAPI oroStreamCreate( oroStream* stream )
 {
+#if defined( ORO_INTEL )
+	if( s_api & ORO_API_INTEL )
+	{
+		if( s_iCtxt.m_ctxt == 0 || s_iCtxt.m_device == 0 ) return oroErrorUnknown;
+
+		auto dev = s_iCtxt.m_device;
+		uint32_t numQueueGroups = 0;
+		auto e = zeDeviceGetCommandQueueGroupProperties( dev, &numQueueGroups, nullptr );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+
+		std::vector<ze_command_queue_group_properties_t> queueProperties( numQueueGroups );
+		e = zeDeviceGetCommandQueueGroupProperties( dev, &numQueueGroups, queueProperties.data() );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+
+		ze_command_queue_desc_t cmdQueueDesc = {};
+		for( uint32_t i = 0; i < numQueueGroups; i++ )
+		{
+			if( queueProperties[i].flags & ZE_COMMAND_QUEUE_GROUP_PROPERTY_FLAG_COMPUTE )
+			{
+				cmdQueueDesc.ordinal = i;
+			}
+		}
+
+		cmdQueueDesc.index = 0;
+		cmdQueueDesc.mode = ZE_COMMAND_QUEUE_MODE_ASYNCHRONOUS;
+		e = zeCommandQueueCreate( s_iCtxt.m_ctxt, dev, &cmdQueueDesc, (ze_command_queue_handle_t*)stream );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+
+		ze_command_list_handle_t command_list;
+		ze_command_list_desc_t cmdListDesc = {};
+		cmdListDesc.commandQueueGroupOrdinal = cmdQueueDesc.ordinal;
+		e = zeCommandListCreate( s_iCtxt.m_ctxt, dev, &cmdListDesc, &command_list );
+		s_iCtxt.m_cmdList = command_list;
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+
+		return oroSuccess;
+	}
+#endif
 	__ORO_FUNC1(StreamCreate((CUstream*)stream, 0),
 		StreamCreate((hipStream_t*)stream));
 
 	return oroErrorUnknown;
 }
 oroError OROAPI oroStreamSynchronize( oroStream hStream ) 
-{ 
+{
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		if( hStream == 0 ) return oroErrorUnknown;
+		ze_command_queue_handle_t queue = (ze_command_queue_handle_t)hStream;
+		auto e = zeCommandListClose( s_iCtxt.m_cmdList );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		e = zeCommandQueueExecuteCommandLists( queue, 1, &s_iCtxt.m_cmdList, nullptr );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		e = zeCommandQueueSynchronize(queue, std::numeric_limits<uint64_t>::max() );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		e = zeCommandListReset( s_iCtxt.m_cmdList );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		return oroSuccess;
+	}
+#endif
 	__ORO_FUNC1( StreamSynchronize( (CUstream)hStream ), StreamSynchronize( (hipStream_t)hStream ) );
 	return oroErrorUnknown; 
 }
 oroError OROAPI oroStreamDestroy( oroStream stream )
 {
+#if defined( ORO_INTEL )
+	if( s_api == ORO_API_INTEL )
+	{
+		auto e = zeCommandListDestroy( s_iCtxt.m_cmdList );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		e = zeCommandQueueDestroy( (ze_command_queue_handle_t)stream );
+		if( e != ZE_RESULT_SUCCESS ) return (oroError)e;
+		return oroSuccess;
+	}
+#endif
 	__ORO_FUNC1(StreamDestroy((CUstream)stream), 
 		StreamDestroy((hipStream_t)stream ));
 
