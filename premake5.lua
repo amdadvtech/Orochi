@@ -9,6 +9,11 @@ newoption {
 }
 
 newoption {
+   trigger = "kernelcompile",
+   description = "Compile kernels used for unit test"
+}
+
+newoption {
    trigger = "intel",
    description = "Intel support (experimental)"
 }
