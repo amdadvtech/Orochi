@@ -258,6 +258,7 @@ hipCtx_t* oroCtx2hip( oroCtx* a )
 	ioroCtx_t* b = *a;
 	return (hipCtx_t*)&b->m_ptr;
 }
+#if defined( ORO_INTEL )
 inline ze_context_handle_t* oroCtx2intel( oroCtx* a )
 {
 	ioroCtx_t* b = *a;
@@ -267,6 +268,7 @@ inline ze_device_handle_t oroDevice2intel( oroU64 d )
 { 
 	return (ze_device_handle_t)d;
 }
+#endif
 inline orortcResult hiprtc2oro( hiprtcResult a ) {
 	return (orortcResult)a;
 }
@@ -856,7 +858,7 @@ oroError OROAPI oroMemset(oroDeviceptr dstDevice, unsigned int ui, size_t N)
 		return oroSuccess;
 	}
 #endif
-	__ORO_FUNC1( MemsetD8( (CUdeviceptr)dstDevice, ui, N ), Memset((void*)dstDevice, ui, N));
+	__ORO_FUNC1( MemsetD32( (CUdeviceptr)dstDevice, ui, N/sizeof(int) ), Memset( (void*)dstDevice, ui, N ) );
 	return oroErrorUnknown;
 }
 
