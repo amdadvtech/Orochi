@@ -858,7 +858,7 @@ oroError OROAPI oroMemset(oroDeviceptr dstDevice, unsigned int ui, size_t N)
 		return oroSuccess;
 	}
 #endif
-	__ORO_FUNC1( MemsetD32( (CUdeviceptr)dstDevice, ui, N/sizeof(int) ), Memset( (void*)dstDevice, ui, N ) );
+	__ORO_FUNC1( MemsetD32( (CUdeviceptr)dstDevice, ui, N / sizeof( int ) ), MemsetD32( dstDevice, ui, N / sizeof(int) ) );
 	return oroErrorUnknown;
 }
 

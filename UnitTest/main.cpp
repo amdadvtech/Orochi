@@ -108,8 +108,6 @@ TEST_F( OroTestBase, kernelExec )
 
 TEST_F( OroTestBase, kernelExecPreCompiled )
 {
-	if( oroGetCurAPI( 0 ) != ORO_API_INTEL ) return;
-
 	oroDeviceProp props;
 	OROCHECK( oroGetDeviceProperties( &props, m_device ) );
 	const bool isAmd = oroGetCurAPI( 0 ) == ORO_API_HIP;
@@ -120,8 +118,10 @@ TEST_F( OroTestBase, kernelExecPreCompiled )
 	switch( oroGetCurAPI( 0 ) )
 	{
 	case ORO_API_HIP:
+		path = "../UnitTest/binary/testKernel1.hipfb";
 		break;
-	case ORO_API_CUDA:
+	case ORO_API_CUDADRIVER:
+		path = "../UnitTest/binary/testKernel1.fatbin";
 		break;
 	case ORO_API_INTEL:
 		path = "../UnitTest/binary/testKernel1_Gen12LPdg1.spv";
@@ -151,8 +151,6 @@ TEST_F( OroTestBase, kernelExecPreCompiled )
 
 TEST_F( OroTestBase, kernelExecPreCompiled1 )
 {
-	if( oroGetCurAPI( 0 ) != ORO_API_INTEL ) return;
-
 	oroDeviceProp props;
 	OROCHECK( oroGetDeviceProperties( &props, m_device ) );
 	{
@@ -166,8 +164,10 @@ TEST_F( OroTestBase, kernelExecPreCompiled1 )
 	switch( oroGetCurAPI( 0 ) )
 	{
 	case ORO_API_HIP:
+		path = "../UnitTest/binary/testKernel1.hipfb";
 		break;
-	case ORO_API_CUDA:
+	case ORO_API_CUDADRIVER:
+		path = "../UnitTest/binary/testKernel1.fatbin";
 		break;
 	case ORO_API_INTEL:
 		path = "../UnitTest/binary/testKernel1_Gen12LPdg1.spv";
