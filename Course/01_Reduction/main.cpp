@@ -12,13 +12,6 @@ class ReductionSample : public Sample
 		Oro::GpuMemory<int> d_output( 1 );
 
 		std::vector<int> h_input( size );
-		int h_output = 0;
-		for( u32 i = 0; i < size; ++i )
-		{
-			h_input[i] = distribution( generator );
-			h_output += h_input[i];
-		}
-		d_input.copyFromHost( h_input.data(), size );
 
 		std::vector<const char*> opts;
 		opts.push_back( "-I../" );
@@ -30,6 +23,14 @@ class ReductionSample : public Sample
 			const void* args[] = { &size, d_input.address(), d_output.address() };
 			for( u32 i = 0; i < RunCount; ++i )
 			{
+				int h_output = 0;
+				for( u32 j = 0; j < size; ++j )
+				{
+					h_input[j] = distribution( generator );
+					h_output += h_input[j];
+				}
+				d_input.copyFromHost( h_input.data(), size );
+
 				OrochiUtils::memset( d_output.ptr(), 0, sizeof( int ) );
 				OrochiUtils::waitForCompletion();
 				sw.start();
@@ -43,8 +44,7 @@ class ReductionSample : public Sample
 				float time = sw.getMs();
 				float speed = static_cast<float>( size ) / 1000.0f / 1000.0f / time;
 				float items = size / 1000.0f / 1000.0f;
-				std::cout << std::setprecision( 2 ) << items << "M items reduced in " << time << " ms (" << speed << " GItems/s), result " 
-					<< d_output.getSingle() << " ( reference " << h_output << ") [" << kernelName << "]" << std::endl;
+				std::cout << std::setprecision( 2 ) << items << "M items reduced in " << time << " ms (" << speed << " GItems/s)  [" << kernelName << "]" << std::endl;
 			}
 		};
 

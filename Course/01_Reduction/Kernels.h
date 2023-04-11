@@ -5,17 +5,10 @@ __device__ T ReduceBlock( T val, volatile T* cache )
 {
 	cache[threadIdx.x] = val;
 	__syncthreads();
-	int active = blockDim.x;
 	for( int i = 1; i < blockDim.x; i <<= 1 )
 	{
-		#if 0
 		if( ( threadIdx.x & i ) == i )
 			cache[threadIdx.x] += cache[threadIdx.x ^ i];
-		#else
-		active >>= 1;
-		if( threadIdx.x < active)
-			cache[i * ( 2 * threadIdx.x + 2 ) - 1] += cache[i * ( 2 * threadIdx.x + 1 ) - 1];
-		#endif
 		__syncthreads();
 	}
 	return cache[blockDim.x - 1];

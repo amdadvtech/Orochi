@@ -1,6 +1,6 @@
 #include <common/Common.h>
 
-class PrefixScanSample : public Sample
+class WritingOutputSample : public Sample
 {
   public:
 	void run( u32 size ) 
@@ -11,10 +11,8 @@ class PrefixScanSample : public Sample
 		Oro::GpuMemory<int> d_input( size );
 		Oro::GpuMemory<int> d_output( size );
 		Oro::GpuMemory<int> d_counter( 1 );
-		Oro::GpuMemory<int> d_sum( 1 );
 
 		std::vector<int> h_input( size );
-		std::vector<int> h_output( size );
 		
 		std::vector<const char*> opts;
 		opts.push_back( "-I../" );
@@ -22,49 +20,43 @@ class PrefixScanSample : public Sample
 		Stopwatch sw;
 		auto test = [&]( const char* kernelName )
 		{
-			oroFunction func = m_utils.getFunctionFromFile( m_device, "../02_PrefixScan/Kernels.h", kernelName, &opts );
-			const void* args[] = { &size, d_input.address(), d_output.address(), d_sum.address(), d_counter.address() };
+			oroFunction func = m_utils.getFunctionFromFile( m_device, "../03_WritingOutput/Kernels.h", kernelName, &opts );
+			const void* args[] = { &size, d_input.address(), d_output.address(), d_counter.address() };
 			for( u32 i = 0; i < RunCount; ++i )
 			{
-				h_output[0] = 0;
+				int h_counter = 0;
 				for( u32 j = 0; j < size; ++j )
 				{
 					h_input[j] = distribution( generator );
-					if( j == 0 )
-						h_output[j] = h_input[j];
-					else
-						h_output[j] = h_input[j] + h_output[j - 1];
+					if( h_input[j] & 1 ) ++h_counter;
 				}
 				d_input.copyFromHost( h_input.data(), size );
 
 				OrochiUtils::memset( d_counter.ptr(), 0, sizeof( int ) );
-				OrochiUtils::memset( d_sum.ptr(), 0, sizeof( int ) );
 				OrochiUtils::waitForCompletion();
 				sw.start();
 
-				OrochiUtils::launch1D( func, size, args, BlockSize, BlockSize * sizeof( int ) );
+				OrochiUtils::launch1D( func, size, args, BlockSize );
 				OrochiUtils::waitForCompletion();
 				sw.stop();
 
-				std::vector<int> output = d_output.getData();
-				for( u32 j = 0; j < size; ++j )
-					OROASSERT( h_output[j] == output[j], 0 );
+				OROASSERT( h_counter == d_counter.getSingle(), 0 );
 
 				float time = sw.getMs();
 				float speed = static_cast<float>( size ) / 1000.0f / 1000.0f / time;
 				float items = size / 1000.0f / 1000.0f;
-				std::cout << std::setprecision( 2 ) << items << "M items scanned in " << time << " ms (" << speed << " GItems/s) [" << kernelName << "] " << std::endl;
+				std::cout << std::setprecision( 2 ) << items << "M output in " << time << " ms (" << speed << " GItems/s) [" << kernelName << "] " << std::endl;
 			}
 		};
 
-		test( "ScanDeviceBlellochKernel" );
-		test( "ScanDeviceHillisSteeleKernel" );
+		test( "WritingOutputBinaryKernel" );
+		test( "WritingOutputKernel" );
 	}
 };
 
 int main( int argc, char** argv )
 {
-	PrefixScanSample sample;
+	WritingOutputSample sample;
 	sample.run( 16 * 1000 * 1 );
 	sample.run( 16 * 1000 * 10 );
 	sample.run( 16 * 1000 * 100 );

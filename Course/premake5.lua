@@ -71,3 +71,5 @@ workspace "Course"
 
    include "./01_Reduction"
    include "./02_PrefixScan"
+   include "./03_WritingOutput"
+   
