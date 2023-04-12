@@ -17,7 +17,6 @@ __device__ T ReduceBlock( T val, volatile T* cache )
 template<typename T>
 __device__ T ReduceWarp( T val )
 {
-	const u32 laneIndex = threadIdx.x & ( warpSize - 1 );
 	for( int i = 1; i < warpSize; i <<= 1 )
 	{
 		T tmp = __shfl_xor( val, i );
@@ -28,7 +27,7 @@ __device__ T ReduceWarp( T val )
 
 extern "C" __global__ void ReduceBlockKernel( u32 size, const int* input, int* output )
 {
-	const u32 index = threadIdx.x + blockDim.x * blockIdx.x;
+	u32 index = threadIdx.x + blockDim.x * blockIdx.x;
 
 	int val = 0;
 	if( index < size ) val = input[index];
@@ -40,8 +39,8 @@ extern "C" __global__ void ReduceBlockKernel( u32 size, const int* input, int* o
 
 extern "C" __global__ void ReduceWarpKernel( u32 size, const int* input, int* output )
 {
-	const u32 index = threadIdx.x + blockDim.x * blockIdx.x;
-	const u32 laneIndex = threadIdx.x & ( warpSize - 1 );
+	u32 index = threadIdx.x + blockDim.x * blockIdx.x;
+	u32 laneIndex = threadIdx.x & ( warpSize - 1 );
 
 	int val = 0;
 	if( index < size ) val = input[index];

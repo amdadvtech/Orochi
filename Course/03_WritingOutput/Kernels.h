@@ -14,56 +14,54 @@ __device__ T ScanWarp( T val )
 
 __device__ int ScanWarpBinary( bool val )
 {
-	u64 ballot = __ballot( val != 0 );
-	int pps = __popcll( ballot );
 	int laneIndex = threadIdx.x & ( warpSize - 1 );
-	return __popcll( ballot & ( ( 1ull << laneIndex ) - 1 ) );
+	u64 ballot = __ballot( val );
+	return __popcll( ballot & ( ( 1ull << laneIndex ) - 1ull ) );
 }
 
-__device__ int WriteOutputBinary( u32 size, const int* input, int* output, int* counter )
+extern "C" __global__ void WritingOutputNaiveKernel( u32 size, const int* input, int* output, int* counter )
 {
-	const u32 index = threadIdx.x + blockDim.x * blockIdx.x;
-	const u32 laneIndex = threadIdx.x & ( warpSize - 1 );
-	
-	int val = 0;
-	if( index < size ) val = input[index];
-
-	int warpScan = ScanWarpBinary( val & 1 );
-	int warpOffset;
-	if( laneIndex == warpSize - 1 )
-		warpOffset = atomicAdd( counter, warpScan + ( val & 1 ) );
-	warpOffset = __shfl( warpOffset, warpSize - 1 );
-
-	if( index < size && ( val & 1 ) )
-		output[warpOffset + warpScan] = val;
-}
-
-__device__ int WriteOutput( u32 size, const int* input, int* output, int* counter )
-{
-	const u32 index = threadIdx.x + blockDim.x * blockIdx.x;
-	const u32 laneIndex = threadIdx.x & ( warpSize - 1 );
+	u32 index = threadIdx.x + blockDim.x * blockIdx.x;
 
 	int val = 0;
 	if( index < size ) val = input[index];
 
-	int warpScan = ScanWarp( val & 1 ) - ( val & 1 );
-	int warpOffset;
-	if( laneIndex == warpSize - 1 )
-	{
-		warpOffset = atomicAdd( counter, warpScan + ( val & 1 ) );
-	}
-	warpOffset = __shfl( warpOffset, warpSize - 1 );
-
-	if( index < size && ( val & 1 ) )
-		output[warpOffset + warpScan] = val;
+	bool predicate = val & 1;
+	if( index < size && predicate ) output[atomicAdd( counter, 1 )] = val;
 }
 
 extern "C" __global__ void WritingOutputKernel( u32 size, const int* input, int* output, int* counter )
 {
-	WriteOutput( size, input, output, counter );
+	u32 index = threadIdx.x + blockDim.x * blockIdx.x;
+	u32 laneIndex = threadIdx.x & ( warpSize - 1 );
+
+	int val = 0;
+	if( index < size ) val = input[index];
+
+	bool predicate = val & 1;
+	int warpScan = ScanWarp( predicate ? 1 : 0 ) - predicate;
+
+	int warpOffset = 0;
+	if( laneIndex == warpSize - 1 ) warpOffset = atomicAdd( counter, warpScan + predicate );
+	warpOffset = __shfl( warpOffset, warpSize - 1 );
+
+	if( index < size && predicate ) output[warpOffset + warpScan] = val;
 }
 
 extern "C" __global__ void WritingOutputBinaryKernel( u32 size, const int* input, int* output, int* counter )
 {
-	WriteOutputBinary( size, input, output, counter );
+	u32 index = threadIdx.x + blockDim.x * blockIdx.x;
+	u32 laneIndex = threadIdx.x & ( warpSize - 1 );
+
+	int val = 0;
+	if( index < size ) val = input[index];
+
+	bool predicate = val & 1;
+	int warpScan = ScanWarpBinary( predicate );
+
+	int warpOffset = 0;
+	if( laneIndex == warpSize - 1 ) warpOffset = atomicAdd( counter, warpScan + predicate );
+	warpOffset = __shfl( warpOffset, warpSize - 1 );
+
+	if( index < size && predicate ) output[warpOffset + warpScan] = val;
 }

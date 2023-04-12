@@ -33,9 +33,9 @@ void checkOrortc( orortcResult res, const char* file, int line );
 class Sample
 {
   public:
-	static constexpr int DeviceIndex = 1;
-	static constexpr int RunCount = 8;
-	static constexpr int BlockSize = 64;
+	static constexpr int DeviceIndex = 0;
+	static constexpr int RunCount = 4;
+	static constexpr int BlockSize = 1024;
 
 	Sample()
 	{

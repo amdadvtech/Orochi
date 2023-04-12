@@ -86,7 +86,7 @@ __device__ T ScanDevice( T val, volatile T* cache, T* sum, int* counter )
 
 extern "C" __global__ void ScanDeviceHillisSteeleKernel( u32 size, const int* input, int* output, int* sum, int* counter )
 {
-	const u32 index = threadIdx.x + blockDim.x * blockIdx.x;
+	u32 index = threadIdx.x + blockDim.x * blockIdx.x;
 
 	int val = 0;
 	if( index < size ) val = input[index];
@@ -99,7 +99,7 @@ extern "C" __global__ void ScanDeviceHillisSteeleKernel( u32 size, const int* in
 
 extern "C" __global__ void ScanDeviceBlellochKernel( u32 size, const int* input, int* output, int* sum, int* counter )
 {
-	const u32 index = threadIdx.x + blockDim.x * blockIdx.x;
+	u32 index = threadIdx.x + blockDim.x * blockIdx.x;
 
 	int val = 0;
 	if( index < size ) val = input[index];
