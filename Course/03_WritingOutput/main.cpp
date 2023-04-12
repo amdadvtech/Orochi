@@ -10,7 +10,7 @@ class WritingOutputSample : public Sample
 
 		Oro::GpuMemory<int> d_input( size );
 		Oro::GpuMemory<int> d_output( size );
-		Oro::GpuMemory<int> d_counter( 1 );
+		Oro::GpuMemory<int> d_counters( 2 );
 
 		std::vector<int> h_input( size );
 		
@@ -21,7 +21,7 @@ class WritingOutputSample : public Sample
 		auto test = [&]( const char* kernelName )
 		{
 			oroFunction func = m_utils.getFunctionFromFile( m_device, "../03_WritingOutput/Kernels.h", kernelName, &opts );
-			const void* args[] = { &size, d_input.address(), d_output.address(), d_counter.address() };
+			const void* args[] = { &size, d_input.address(), d_output.address(), d_counters.address() };
 			for( u32 i = 0; i < RunCount; ++i )
 			{
 				int h_counter = 0;
@@ -33,7 +33,7 @@ class WritingOutputSample : public Sample
 				}
 				d_input.copyFromHost( h_input.data(), size );
 
-				OrochiUtils::memset( d_counter.ptr(), 0, sizeof( int ) );
+				OrochiUtils::memset( d_counters.ptr(), 0, 2 * sizeof( int ) );
 				OrochiUtils::waitForCompletion();
 				sw.start();
 
@@ -41,10 +41,7 @@ class WritingOutputSample : public Sample
 				OrochiUtils::waitForCompletion();
 				sw.stop();
 
-				//OROASSERT( h_counter == d_counter.getSingle(), 0 );
-				if( h_counter != d_counter.getSingle() ) printf( "%d != %d\n", h_counter, d_counter.getSingle() );
-
-				std::vector<int> o = d_output.getData();
+				OROASSERT( h_counter == d_counters.getSingle(), 0 );
 
 				float time = sw.getMs();
 				float speed = static_cast<float>( size ) / 1000.0f / 1000.0f / time;
@@ -56,6 +53,7 @@ class WritingOutputSample : public Sample
 		test( "WritingOutputNaiveKernel" );
 		test( "WritingOutputKernel" );
 		test( "WritingOutputBinaryKernel" );
+		test( "WritingOutputComplementKernel" );
 	}
 };
 

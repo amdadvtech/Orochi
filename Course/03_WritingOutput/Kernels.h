@@ -65,3 +65,29 @@ extern "C" __global__ void WritingOutputBinaryKernel( u32 size, const int* input
 
 	if( index < size && predicate ) output[warpOffset + warpScan] = val;
 }
+
+extern "C" __global__ void WritingOutputComplementKernel( u32 size, const int* input, int* output, int* counters )
+{
+	u32 index = threadIdx.x + blockDim.x * blockIdx.x;
+	u32 laneIndex = threadIdx.x & ( warpSize - 1 );
+
+	int val = 0;
+	if( index < size ) val = input[index];
+
+	bool predicate = val & 1;
+	int warpScan = ScanWarpBinary( predicate );
+	int complWarpScan = laneIndex - warpScan;
+
+	int warpOffset = 0;
+	if( laneIndex == warpSize - 1 ) warpOffset = atomicAdd( &counters[0], warpScan + predicate );
+	warpOffset = __shfl( warpOffset, warpSize - 1 );
+
+	int complWarpOffset = 0;
+	if( laneIndex == warpSize - 1 ) complWarpOffset = atomicAdd( &counters[1], complWarpScan + !predicate );
+	complWarpOffset = __shfl( complWarpOffset, warpSize - 1 );
+
+	if( index < size && predicate )
+		output[warpOffset + warpScan] = val;
+	else
+		output[size - 1 - ( complWarpOffset + complWarpScan )] = val;
+}
