@@ -351,9 +351,227 @@ class BLP
 	std::vector<uint32_t> m_table;
 };
 
+class BLPZeroEmpty
+{
+  public:
+	BLPZeroEmpty( int n ) : m_table( n ) {}
+
+	uint32_t home( uint32_t hashValue ) const { return (uint64_t)hashValue * m_table.size() / ( (uint64_t)UINT_MAX + 1 ); }
+
+	// k must be less than equal 0x7FFFFFFF
+	int insert( uint32_t k )
+	{
+		k++;
+
+		uint32_t hashK = hash( k );
+		uint32_t h = home( hashK );
+		if( m_table[h] == 0 )
+		{
+			m_table[h] = hashK;
+			return h;
+		}
+		else if( m_table[h] == hashK )
+		{
+			return h;
+		}
+
+		bool moveTowardLeft = m_table[h] < hashK;
+
+		for( int iter = 0; iter < 2; iter++ )
+		{
+			int j = h;
+			if( moveTowardLeft )
+			{
+				// find
+				if( iter == 0 )
+				{
+					while( j + 1 < m_table.size() && m_table[j + 1] && m_table[j + 1] <= hashK )
+					{
+						j++;
+					}
+					if( m_table[j] == hashK )
+					{
+						return j;
+					}
+					j = h;
+				}
+
+				// example: hash(k) = 8
+				// 7 < hash(k)
+				// [ ][ ][3][6][7][ ]
+				//     |<-------j
+				// The elements are too right-shifed.
+				// find empty location on the left
+				while( 0 < j && m_table[j] )
+				{
+					j--;
+				}
+
+				if( m_table[j] )
+				{
+					// No empty space in this dir. Try other direction
+					moveTowardLeft = !moveTowardLeft;
+					continue;
+				}
+
+				// move toword left while T[j+1] < hashK
+				//     +--+
+				//     v  |
+				// [ ][3][3][6][7][ ]
+				//     j
+				while( j + 1 < m_table.size() && m_table[j + 1] && m_table[j + 1] < hashK )
+				{
+					m_table[j] = m_table[j + 1];
+					j++;
+				}
+
+				// [ ][3][6][7][7][ ]
+				//              j
+			}
+			else // hashK <= m_table[h];
+			{
+				// find
+				if( iter == 0 )
+				{
+					while( 0 <= j - 1 && m_table[j - 1] && hashK <= m_table[j - 1] )
+					{
+						j--;
+					}
+					if( m_table[j] == hashK )
+					{
+						return j;
+					}
+					j = h;
+				}
+
+				// example: hash(k) = 5
+				// hash(k) < 6
+				// [ ][ ][ ][2][6][7][8][ ]
+				//              h
+				// The elements are too left-shifed.
+				// find empty location on the right
+				while( j + 1 < m_table.size() && m_table[j] )
+				{
+					j++;
+				}
+
+				if( m_table[j] )
+				{
+					// No empty space in this dir. Try other direction
+					moveTowardLeft = !moveTowardLeft;
+					continue;
+				}
+
+				// move toword right while hashK < T[j-1]
+				//                    +--+
+				//                    |  v
+				// [ ][ ][ ][2][6][7][8][8]
+				//                       j
+				while( 0 <= j - 1 && m_table[j - 1] && hashK < m_table[j - 1] )
+				{
+					m_table[j] = m_table[j - 1];
+					j--;
+				}
+
+				// [ ][ ][ ][2][6][6][7][8]
+				//              j
+			}
+
+			m_table[j] = hashK;
+			return j;
+		}
+		return -1;
+	}
+	int find( uint32_t k ) const
+	{
+		k++;
+
+		uint32_t hashK = hash( k );
+		uint32_t h = home( hashK );
+		if( m_table[h] == 0 )
+		{
+			return -1;
+		}
+		else if( m_table[h] == hashK )
+		{
+			return h;
+		}
+
+		bool moveTowardLeft = m_table[h] < hashK;
+		int j = h;
+		if( moveTowardLeft )
+		{
+			while( j + 1 < m_table.size() && m_table[j + 1] && m_table[j + 1] <= hashK )
+			{
+				j++;
+			}
+			if( m_table[j] == hashK )
+			{
+				return j;
+			}
+		}
+		else
+		{
+			while( 0 <= j - 1 && m_table[j - 1] && hashK <= m_table[j - 1] )
+			{
+				j--;
+			}
+			if( m_table[j] == hashK )
+			{
+				return j;
+			}
+		}
+		return -1;
+	}
+
+	std::set<uint32_t> set() const
+	{
+		std::set<uint32_t> s;
+		for( auto value : m_table )
+		{
+			if( value )
+			{
+				s.insert( unhash( value ) - 1 /* back to the original */ );
+			}
+		}
+		return s;
+	}
+
+	void print()
+	{
+		printf( "data=" );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			if( m_table[i] )
+			{
+				printf( "%02d, ", unhash( m_table[i] ) - 1 /* back to the original */ );
+			}
+			else
+			{
+				printf( "--, " );
+			}
+		}
+		printf( "\nhome=" );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			printf( "%02d, ", home( m_table[i] ) );
+		}
+		printf( "\n" );
+
+		printf( "hash=" );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			printf( "%x, ", m_table[i] );
+		}
+		printf( "\n" );
+	}
+	std::vector<uint32_t> m_table;
+};
 template <class T>
 void runTest( )
 {
+	uint32_t k = unhash( 0 );
+
 	int NBuckets = 1000;
 	int Numbers = 10000;
 	splitmix64 rnd;
@@ -420,9 +638,13 @@ int main( int argc, char** argv )
 	// Test
 	runTest<LP>();
 	runTest<BLP>();
+	runTest<BLPZeroEmpty>();
 
-	runPerfTest<LP>();
-	runPerfTest<BLP>();
+	{
+		runPerfTest<LP>();
+		runPerfTest<BLP>();
+		runPerfTest<BLPZeroEmpty>();
+	}
 
 	return EXIT_SUCCESS;
 }
