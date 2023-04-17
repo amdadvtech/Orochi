@@ -131,7 +131,139 @@ class LP
 	}
 	std::vector<uint32_t> m_table;
 };
+class RH
+{
+  public:
+	RH( int n ) : m_table( n ) {}
 
+	uint32_t home( uint32_t h ) const { return (uint64_t)h * m_table.size() / ( (uint64_t)UINT_MAX + 1 ); }
+
+	// probe sequence lengths
+	uint32_t psl( int i, uint32_t h )
+	{
+		/*
+		PSL =
+		 2  3  4     1
+		[ ][ ][ ][h][ ]
+		*/
+		int homeLocation = (int)home( h );
+
+		if( i < homeLocation )
+		{
+			// e.g. h 3 - 5 = -2
+			homeLocation = homeLocation - (int)m_table.size();
+		}
+
+		return i - homeLocation;
+	}
+
+	// k must be less than equal 0x7FFFFFFF
+	int insert( uint32_t k )
+	{
+		uint32_t h = home( hash( k ) );
+		int PSL = 0;
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			int location = ( h + i ) % m_table.size();
+
+			if( ( m_table[location] & OCCUPIED_BIT ) == 0 )
+			{
+				m_table[location] = k | OCCUPIED_BIT;
+				return location;
+			}
+			else if( ( m_table[location] & VALUE_MASK ) == k )
+			{
+				return location;
+			}
+			int thePSL = psl( location, hash( m_table[location] & VALUE_MASK ) );
+			if( thePSL < PSL )
+			{
+				uint32_t theValue = m_table[location] & VALUE_MASK;
+				m_table[location] = k | OCCUPIED_BIT;
+
+				PSL = thePSL;
+				k = theValue;
+			}
+			PSL++;
+		}
+		return -1;
+	}
+	int find( uint32_t k ) const
+	{
+		uint32_t h = home( hash( k ) );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			int location = ( h + i ) % m_table.size();
+			if( ( m_table[location] & OCCUPIED_BIT ) == 0 )
+			{
+				return -1;
+			}
+			else if( m_table[location] == ( k | OCCUPIED_BIT ) )
+			{
+				return location;
+			}
+		}
+		return -1;
+	}
+	std::set<uint32_t> set() const
+	{
+		std::set<uint32_t> s;
+		for( auto value : m_table )
+		{
+			if( value & OCCUPIED_BIT )
+			{
+				s.insert( value & VALUE_MASK );
+			}
+		}
+		return s;
+	}
+
+	void print()
+	{
+		printf( "data=" );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			if( m_table[i] & OCCUPIED_BIT )
+			{
+				printf( "%03d, ", m_table[i] & VALUE_MASK );
+			}
+			else
+			{
+				printf( "---, " );
+			}
+		}
+		printf( "\n" );
+
+		printf( "home=" );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			if( m_table[i] & OCCUPIED_BIT )
+			{
+				printf( "%03d, ", home( m_table[i] & VALUE_MASK ) );
+			}
+			else
+			{
+				printf( "---, " );
+			}
+		}
+		printf( "\n" );
+
+		printf( "PSL =" );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			if( m_table[i] & OCCUPIED_BIT )
+			{
+				printf( "%03d, ", psl( i, hash( m_table[i] & VALUE_MASK ) ) );
+			}
+			else
+			{
+				printf( "---, " );
+			}
+		}
+		printf( "\n" );
+	}
+	std::vector<uint32_t> m_table;
+};
 class BLP
 {
   public:
@@ -845,8 +977,11 @@ int main( int argc, char** argv )
 	runTest<BLP>();
 	runTest<BLPZeroEmpty>();
 	runTest<BLPZeroEmptyBranchless>();
+	runTest<RH>();
+
 	{
 		runPerfTest<LP>();
+		runPerfTest<RH>();
 		runPerfTest<BLP>();
 		runPerfTest<BLPZeroEmpty>();
 		runPerfTest<BLPZeroEmptyBranchless>();
