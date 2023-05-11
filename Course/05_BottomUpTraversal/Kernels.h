@@ -3,7 +3,7 @@
 extern "C" __global__ void BottomUpTraversalKernel( u32 size, Node* nodes, Leaf* leaves )
 {
 	int index = threadIdx.x + blockDim.x * blockIdx.x;
-	if( index < size ) return;
+	if( index >= size ) return;
 
 	Leaf& leaf = leaves[index];
 	index = leaf.m_parent;

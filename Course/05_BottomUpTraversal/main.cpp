@@ -76,7 +76,7 @@ class BottomUpTraversalSample : public Sample
 				int h_sum = 0;
 				for( u32 j = 0; j < size; ++j )
 				{
-					h_input[j] = 1; // distribution( generator );
+					h_input[j] = distribution( generator );
 					h_sum += h_input[j];
 				}
 				buildTree( h_input, h_nodes, h_leaves );
@@ -90,7 +90,6 @@ class BottomUpTraversalSample : public Sample
 				OrochiUtils::waitForCompletion();
 				sw.stop();
 
-				if( h_sum != d_nodes.getSingle().m_sum ) printf( "%d != %d\n", h_sum, d_nodes.getSingle().m_sum );
 				OROASSERT( h_sum == d_nodes.getSingle().m_sum, 0 );
 
 				float time = sw.getMs();
@@ -110,7 +109,7 @@ int main( int argc, char** argv )
 	sample.run( 16 * 1000 * 1 );
 	sample.run( 16 * 1000 * 10 );
 	sample.run( 16 * 1000 * 100 );
-	sample.run( 16 * 1000 * 1000 );
+	sample.run( 16 * 1024 * 1000 );
 
 	return EXIT_SUCCESS;
 }
