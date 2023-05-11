@@ -46,7 +46,7 @@ class WritingOutputSample : public Sample
 				float time = sw.getMs();
 				float speed = static_cast<float>( size ) / 1000.0f / 1000.0f / time;
 				float items = size / 1000.0f / 1000.0f;
-				std::cout << std::setprecision( 2 ) << items << "M output in " << time << " ms (" << speed << " GItems/s) [" << kernelName << "] " << std::endl;
+				std::cout << std::setprecision( 2 ) << items << "M items output in " << time << " ms (" << speed << " GItems/s) [" << kernelName << "] " << std::endl;
 			}
 		};
 

@@ -1,5 +1,4 @@
 #include <common/Common.h>
-#include <common/BvhBuilder.h>
 
 class WritingOutputSample : public Sample
 {

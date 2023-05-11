@@ -11,9 +11,11 @@
 #include <Test/Stopwatch.h>
 
 #include <algorithm>
+#include <cassert>
 #include <iostream>
 #include <iomanip>
 #include <numeric>
+#include <stack>
 #include <vector>
 #include <random>
 #endif
@@ -22,6 +24,21 @@ typedef unsigned long long u64;
 typedef unsigned int u32;
 typedef unsigned short u16;
 typedef unsigned char u8;
+
+struct alignas( 32 ) Node
+{
+	int m_left;
+	int m_right;
+	int m_parent;
+	int m_sum;
+	int m_counter;
+};
+
+struct alignas( 8 ) Leaf
+{
+	int m_value;
+	int m_parent;
+};
 
 #ifndef __KERNELCC__
 #define CHECK_ORO( error ) ( checkOro( error, __FILE__, __LINE__ ) )
