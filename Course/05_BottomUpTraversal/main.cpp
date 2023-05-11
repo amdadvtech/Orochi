@@ -109,7 +109,7 @@ int main( int argc, char** argv )
 	sample.run( 16 * 1000 * 1 );
 	sample.run( 16 * 1000 * 10 );
 	sample.run( 16 * 1000 * 100 );
-	sample.run( 16 * 1024 * 1000 );
+	sample.run( 16 * 1000 * 1000 );
 
 	return EXIT_SUCCESS;
 }
