@@ -30,8 +30,6 @@ struct alignas( 32 ) Node
 	int m_left;
 	int m_right;
 	int m_parent;
-	int m_sum;
-	int m_counter;
 };
 
 struct alignas( 8 ) Leaf
