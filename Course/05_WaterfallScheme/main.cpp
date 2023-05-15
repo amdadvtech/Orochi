@@ -56,9 +56,10 @@ class BottomUpTraversalSample : public Sample
 		std::default_random_engine generator;
 		std::uniform_int_distribution<int> distribution( 0, 16 );
 
-		Oro::GpuMemory<int> d_counters( size - 1 );
-		Oro::GpuMemory<int> d_sums( size - 1 );
-		Oro::GpuMemory<Node> d_nodes( size - 1 );
+		Oro::GpuMemory<int> d_counters( 2 );
+		Oro::GpuMemory<int> d_taskQueue( size - 1 );
+		Oro::GpuMemory<Node> d_inNodes( size - 1 );
+		Oro::GpuMemory<Node> d_outNodes( size - 1 );
 		Oro::GpuMemory<Leaf> d_leaves( size );
 
 		std::vector<int> h_input( size );
@@ -67,12 +68,13 @@ class BottomUpTraversalSample : public Sample
 		
 		std::vector<const char*> opts;
 		opts.push_back( "-I../" );
+		opts.push_back( "-G" );
 
 		Stopwatch sw;
 		auto test = [&]( const char* kernelName )
 		{
-			oroFunction func = m_utils.getFunctionFromFile( m_device, "../04_BottomUpTraversal/Kernels.h", kernelName, &opts );
-			const void* args[] = { &size, d_nodes.address(), d_leaves.address(), d_sums.address(), d_counters.address() };
+			oroFunction func = m_utils.getFunctionFromFile( m_device, "../05_WaterfallScheme/Kernels.h", kernelName, &opts );
+			const void* args[] = { &size, d_inNodes.address(), d_leaves.address(), d_taskQueue.address(), d_counters.address(), d_outNodes.address() };
 			for( u32 i = 0; i < RunCount; ++i )
 			{
 				int h_sum = 0;
@@ -82,10 +84,13 @@ class BottomUpTraversalSample : public Sample
 					h_sum += h_input[j];
 				}
 				buildTree( h_input, h_nodes, h_leaves );
-				d_nodes.copyFromHost( h_nodes.data(), size - 1 );
+				d_inNodes.copyFromHost( h_nodes.data(), size - 1 );
 				d_leaves.copyFromHost( h_leaves.data(), size );
 
-				OrochiUtils::memset( d_counters.ptr(), 0, ( size - 1 ) * sizeof( int ) );
+				OrochiUtils::memset( d_counters.ptr(), 0, 2 * sizeof( int ) );
+				OrochiUtils::memset( d_counters.ptr(), 1, sizeof( int ) );
+				OrochiUtils::memset( d_taskQueue.ptr(), -1, ( size - 1 ) * sizeof( int ) );
+				OrochiUtils::memset( d_taskQueue.ptr(), 0, sizeof( int ) );
 				OrochiUtils::waitForCompletion();
 				sw.start();
 
@@ -93,22 +98,23 @@ class BottomUpTraversalSample : public Sample
 				OrochiUtils::waitForCompletion();
 				sw.stop();
 
-				OROASSERT( h_sum == d_sums.getSingle(), 0 );
+				OROASSERT( d_counters.getSingle() == size - 1, 0 );
 
 				float time = sw.getMs();
 				float speed = static_cast<float>( size ) / 1000.0f / 1000.0f / time;
 				float items = size / 1000.0f / 1000.0f;
-				std::cout << std::setprecision( 2 ) << items << "M items summed in " << time << " ms (" << speed << " GItems/s)  [" << kernelName << "]" << std::endl;
+				std::cout << "Tree with " << std::setprecision( 2 ) << items << "M items converted in " << time << " ms (" << speed << " GItems/s)  [" << kernelName << "]" << std::endl;
 			}
 		};
 
-		test( "BottomUpTraversalKernel" );
+		test( "ConvertToBFSKernel" );
 	}
 };
 
 int main( int argc, char** argv )
 {
 	BottomUpTraversalSample sample;
+	sample.run( 16 );
 	sample.run( 16 * 1000 * 1 );
 	sample.run( 16 * 1000 * 10 );
 	sample.run( 16 * 1000 * 100 );
