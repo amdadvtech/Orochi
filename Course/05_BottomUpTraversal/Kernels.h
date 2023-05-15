@@ -1,30 +1,31 @@
 #include <common/Common.h>
 
-extern "C" __global__ void BottomUpTraversalKernel( u32 size, Node* nodes, Leaf* leaves )
+extern "C" __global__ void BottomUpTraversalKernel( u32 size, const Node* nodes, const Leaf* leaves, int* sums, int* counters )
 {
 	int index = threadIdx.x + blockDim.x * blockIdx.x;
 	if( index >= size ) return;
 
-	Leaf& leaf = leaves[index];
+	const Leaf& leaf = leaves[index];
 	index = leaf.m_parent;
 
-	while( atomicAdd( &nodes[index].m_counter, 1 ) > 0 )
+	while( index >= 0 && atomicAdd( &counters[index], 1 ) > 0 )
 	{
 		__threadfence();
 
-		Node& node = nodes[index];
+		const Node& node = nodes[index];
 
-		if( node.m_left < 0 )
-			node.m_sum += leaves[~node.m_left].m_value;
+		int sum = 0;
+		if( node.m_left < 0 ) 
+			sum += leaves[~node.m_left].m_value;
 		else
-			node.m_sum += nodes[node.m_left].m_sum;
+			sum += sums[node.m_left];
 
-		if( node.m_right < 0 )
-			node.m_sum += leaves[~node.m_right].m_value;
+		if( node.m_right < 0 ) 
+			sum += leaves[~node.m_right].m_value;
 		else
-			node.m_sum += nodes[node.m_right].m_sum;
+			sum += sums[node.m_right];
 
+		sums[index] = sum;
 		index = node.m_parent;
-		if( index < 0 ) break;
 	}
 }

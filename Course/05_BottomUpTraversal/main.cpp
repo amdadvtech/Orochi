@@ -5,7 +5,7 @@ class BottomUpTraversalSample : public Sample
   public:
 	void buildTree( const std::vector<int>& input, std::vector<Node>& nodes, std::vector<Leaf>& leaves ) 
 	{ 
-		Node root = { 0, input.size(), -1, 0, 0 };
+		Node root = { 0, input.size(), -1 };
 		nodes[0] = root;
 		int nodeCount = 1;
 
@@ -26,7 +26,7 @@ class BottomUpTraversalSample : public Sample
 			{
 				int childIndex = nodeCount++;
 				node.m_left = childIndex;
-				nodes[childIndex] = { l, m, nodeIndex, 0, 0 };
+				nodes[childIndex] = { l, m, nodeIndex };
 				stack.push( childIndex );
 			}
 			else
@@ -39,7 +39,7 @@ class BottomUpTraversalSample : public Sample
 			{
 				int childIndex = nodeCount++;
 				node.m_right = childIndex;
-				nodes[childIndex] = { m, r, nodeIndex, 0, 0 };
+				nodes[childIndex] = { m, r, nodeIndex };
 				stack.push( childIndex );
 			}
 			else
@@ -56,6 +56,8 @@ class BottomUpTraversalSample : public Sample
 		std::default_random_engine generator;
 		std::uniform_int_distribution<int> distribution( 0, 16 );
 
+		Oro::GpuMemory<int> d_counters( size - 1 );
+		Oro::GpuMemory<int> d_sums( size - 1 );
 		Oro::GpuMemory<Node> d_nodes( size - 1 );
 		Oro::GpuMemory<Leaf> d_leaves( size );
 
@@ -70,7 +72,7 @@ class BottomUpTraversalSample : public Sample
 		auto test = [&]( const char* kernelName )
 		{
 			oroFunction func = m_utils.getFunctionFromFile( m_device, "../05_BottomUpTraversal/Kernels.h", kernelName, &opts );
-			const void* args[] = { &size, d_nodes.address(), d_leaves.address() };
+			const void* args[] = { &size, d_nodes.address(), d_leaves.address(), d_sums.address(), d_counters.address() };
 			for( u32 i = 0; i < RunCount; ++i )
 			{
 				int h_sum = 0;
@@ -83,6 +85,7 @@ class BottomUpTraversalSample : public Sample
 				d_nodes.copyFromHost( h_nodes.data(), size - 1 );
 				d_leaves.copyFromHost( h_leaves.data(), size );
 
+				OrochiUtils::memset( d_counters.ptr(), 0, ( size - 1 ) * sizeof( int ) );
 				OrochiUtils::waitForCompletion();
 				sw.start();
 
@@ -90,7 +93,8 @@ class BottomUpTraversalSample : public Sample
 				OrochiUtils::waitForCompletion();
 				sw.stop();
 
-				OROASSERT( h_sum == d_nodes.getSingle().m_sum, 0 );
+				if( h_sum != d_sums.getSingle() ) printf( "%d != %d\n", h_sum, d_sums.getSingle() );
+				OROASSERT( h_sum == d_sums.getSingle(), 0 );
 
 				float time = sw.getMs();
 				float speed = static_cast<float>( size ) / 1000.0f / 1000.0f / time;
