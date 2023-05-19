@@ -7,6 +7,8 @@
 #include <Windows.h>
 #include <ppl.h>
 
+#include <0n_LinearProbing/LP.h>
+
 // Reference
 // [0] Ordered hash tables ( original idea of BLP, very old )
 // [1] A Concurrent Bidirectional Linear Probing Algorithm
@@ -15,45 +17,7 @@
 // very nice code example:
 // https://github.com/senderista/hashtable-benchmarks
 
-struct splitmix64
-{
-	uint64_t x = 0; /* The state can be seeded with any value. */
-	uint64_t next()
-	{
-		uint64_t z = ( x += 0x9e3779b97f4a7c15 );
-		z = ( z ^ ( z >> 30 ) ) * 0xbf58476d1ce4e5b9;
-		z = ( z ^ ( z >> 27 ) ) * 0x94d049bb133111eb;
-		return z ^ ( z >> 31 );
-	}
-};
 
-const int INT_PHI = 0x9e3779b9;
-const int INV_INT_PHI = 0x144cbc89;
-uint32_t hash( uint32_t x )
-{
-	x *= INT_PHI;
-	x ^= x >> 16;
-	return x;
-}
-uint32_t unhash( uint32_t x )
-{
-	x ^= x >> 16;
-	x *= INV_INT_PHI;
-	return x;
-}
-
-const uint32_t OCCUPIED_BIT = 1 << 31;
-const uint32_t VALUE_MASK = ~OCCUPIED_BIT;
-using u32 = uint32_t;
-
-inline u32 atomicCAS( u32* address, u32 compare, u32 val )
-{
-	return InterlockedCompareExchange( address, val, compare );
-}
-//inline u32 atomicRead( u32* address ) 
-//{
-//	return InterlockedExchangeAdd( address, 0 );
-//}
 
 class LP
 {
@@ -172,101 +136,7 @@ class StdSet_Concurrent
 	// int m_table[1];
 };
 
-class LP_Concurrent
-{
-  public:
-	LP_Concurrent( int n ) : m_table( n ) {}
 
-	int home( u32 k ) const { return hash( k ) % m_table.size(); }
-
-	enum InsertionResult
-	{
-		INSERTED,
-		FOUND,
-		OUT_OF_MEMORY
-	};
-	// k must be less than equal 0x7FFFFFFF
-	InsertionResult insert( u32 k )
-	{
-		u32 h = home( k );
-		for( int i = 0; i < m_table.size(); i++ )
-		{
-			int location = ( h + i ) % m_table.size();
-			u32 r = atomicCAS( &m_table[location], 0 /* empty */, k | OCCUPIED_BIT );
-			if( r == 0 )
-			{
-				return INSERTED;
-			}
-			else if (r == (k | OCCUPIED_BIT))
-			{
-				return FOUND;
-			}
-		}
-		return OUT_OF_MEMORY;
-	}
-
-	bool find( u32 k ) const
-	{
-		u32 h = home( k );
-		for( int i = 0; i < m_table.size(); i++ )
-		{
-			int location = ( h + i ) % m_table.size();
-			if( ( m_table[location] & OCCUPIED_BIT ) == 0 )
-			{
-				return false;
-			}
-			else if( m_table[location] == ( k | OCCUPIED_BIT ) )
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-	std::set<u32> set() const
-	{
-		std::set<u32> s;
-		for( auto value : m_table )
-		{
-			if( value & OCCUPIED_BIT )
-			{
-				s.insert( value & VALUE_MASK );
-			}
-		}
-		return s;
-	}
-
-	void print()
-	{
-		printf( "data=" );
-		for( int i = 0; i < m_table.size(); i++ )
-		{
-			if( m_table[i] & OCCUPIED_BIT )
-			{
-				printf( "%03d, ", m_table[i] & VALUE_MASK );
-			}
-			else
-			{
-				printf( "---, " );
-			}
-		}
-		printf( "\n" );
-
-		printf( "home=" );
-		for( int i = 0; i < m_table.size(); i++ )
-		{
-			if( m_table[i] & OCCUPIED_BIT )
-			{
-				printf( "%03d, ", home( m_table[i] & VALUE_MASK ) );
-			}
-			else
-			{
-				printf( "---, " );
-			}
-		}
-		printf( "\n" );
-	}
-	std::vector<u32> m_table;
-};
 
 class RH
 {
@@ -1201,6 +1071,37 @@ void runConcurrentPerfTest()
 
 	printf( "con / %s insertion %f ms %d\n", typeid( T ).name(), sw.getMs(), a );
 }
+
+inline int div_round_up( int val, int divisor ) 
+{
+	return ( val + divisor - 1 ) / divisor;
+}
+
+class LPSample : public Sample
+{
+public:
+	LPSample() : Sample()
+	{
+		oroStreamCreate( &m_stream );
+	}
+	~LPSample() { 
+		oroStreamDestroy( m_stream ); 
+	}
+	oroCtx getContext() { return m_context; }
+	oroDevice getDevice() { return m_device; }
+	OrochiUtils* getOroUtil() { return &m_utils; }
+
+	void launch1D( const char* function, unsigned int gridDimX, unsigned int blockDimX, std::initializer_list<void*> args )
+	{
+		std::vector<const char*> opts = {
+			"-I../",
+			"-I../0n_LinearProbing/"
+		};
+		oroFunction f = m_utils.getFunctionFromFile( m_device, "../0n_LinearProbing/Kernels.h", function, &opts );
+		oroModuleLaunchKernel( f, gridDimX, 1, 1, blockDimX, 1, 1, 0, m_stream, std::vector<void*>( args ).data(), 0 );
+	}
+	oroStream m_stream = 0;
+};
 int main( int argc, char** argv )
 {
 	// Test
@@ -1210,19 +1111,55 @@ int main( int argc, char** argv )
 	runTest<BLPZeroEmptyBranchless>();
 	runTest<RH>();
 
-	runConcurrentTest<LP_Concurrent>();
+	 runConcurrentTest<LP_ConcurrentCPU>();
 
 	{
-		runConcurrentPerfTest<LP_Concurrent>();
+		runConcurrentPerfTest<LP_ConcurrentCPU>();
 
 		runPerfTest<LP>();
-		runPerfTest<LP_Concurrent>();
+		runPerfTest<LP_ConcurrentCPU>();
 		runPerfTest<RH>();
 		runPerfTest<BLP>();
 		runPerfTest<BLPZeroEmpty>();
 		runPerfTest<BLPZeroEmptyBranchless>();
 	}
-	
+	LPSample sample;
+
+	LP_Concurrent<false> lpGpu( 100 );
+	sample.launch1D( "test", 4, 64, {
+		&lpGpu
+	} );
+
+	LP_Concurrent<true> lpCpu;
+	lpGpu.copyTo( &lpCpu );
+
+	for (auto v : lpCpu.set())
+	{
+		printf( "%d\n", v );
+	}
+
+	//sample.getOroUtil()->getFunctionFromFile( sample.getOroUtil(), "../01_Reduction/Kernels.h", kernelName, &opts );
+	//const void* args[] = { &size, d_input.address(), d_output.address() };
+	//for( u32 i = 0; i < RunCount; ++i )
+	//{
+	//	int h_output = 0;
+	//	for( u32 j = 0; j < size; ++j )
+	//	{
+	//		h_input[j] = distribution( generator );
+	//		h_output += h_input[j];
+	//	}
+	//	d_input.copyFromHost( h_input.data(), size );
+
+	//	OrochiUtils::memset( d_output.ptr(), 0, sizeof( int ) );
+	//	OrochiUtils::waitForCompletion();
+	//	sw.start();
+
+	//	OrochiUtils::launch1D( func, size, args, BlockSize, BlockSize * sizeof( int ) );
+	//	OrochiUtils::waitForCompletion();
+	//	sw.stop();
+
+	//	OROASSERT( h_output == d_output.getSingle(), 0 );
+
 	//for(int i = 0 ; i < 10 ; i++)
 	//{
 	//	int NBuckets = 1000;

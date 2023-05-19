@@ -13,4 +13,4 @@ project "0n_LinearProbing"
       files { "../../Orochi/**.h", "../../Orochi/**.cpp" }
       files { "../../contrib/**.h", "../../contrib/**.cpp" }
       files { "../common/**.h", "../common/**.cpp" }
-      files { "*.h", "*.cpp" }
+      files { "*.h", "*.cpp", "*.natvis" }
