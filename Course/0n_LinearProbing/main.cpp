@@ -3,7 +3,9 @@
 #include <memory>
 #include <set>
 #include <random>
+#include <mutex>
 #include <Windows.h>
+#include <ppl.h>
 
 // Reference
 // [0] Ordered hash tables ( original idea of BLP, very old )
@@ -48,10 +50,10 @@ inline u32 atomicCAS( u32* address, u32 compare, u32 val )
 {
 	return InterlockedCompareExchange( address, val, compare );
 }
-inline u32 atomicRead( u32* address ) 
-{
-	return InterlockedExchangeAdd( address, 0 );
-}
+//inline u32 atomicRead( u32* address ) 
+//{
+//	return InterlockedExchangeAdd( address, 0 );
+//}
 
 class LP
 {
@@ -143,6 +145,33 @@ class LP
 	std::vector<uint32_t> m_table;
 };
 
+// find on concurrent and serial have different behavior, will fix later.
+class StdSet_Concurrent
+{
+  public:
+	StdSet_Concurrent( int n = 0 ){
+	}
+	void insert( u32 k )
+	{
+		std::lock_guard lock( m_mu );
+		m_set.insert( k );
+	}
+
+	bool find( u32 k ) const
+	{
+		std::lock_guard lock( m_mu );
+		return m_set.count( k ) != 0;
+	}
+	std::set<u32> set() const
+	{
+		std::lock_guard lock( m_mu );
+		return m_set;
+	}
+	std::set<u32> m_set;
+	mutable std::mutex m_mu;
+
+	// int m_table[1];
+};
 
 class LP_Concurrent
 {
@@ -177,7 +206,7 @@ class LP_Concurrent
 		return OUT_OF_MEMORY;
 	}
 
-	int find( u32 k ) const
+	bool find( u32 k ) const
 	{
 		u32 h = home( k );
 		for( int i = 0; i < m_table.size(); i++ )
@@ -185,14 +214,14 @@ class LP_Concurrent
 			int location = ( h + i ) % m_table.size();
 			if( ( m_table[location] & OCCUPIED_BIT ) == 0 )
 			{
-				return -1;
+				return false;
 			}
 			else if( m_table[location] == ( k | OCCUPIED_BIT ) )
 			{
-				return location;
+				return true;
 			}
 		}
-		return -1;
+		return false;
 	}
 	std::set<u32> set() const
 	{
@@ -1043,6 +1072,8 @@ void runTest( )
 	}
 }
 
+
+
 template<class T>
 void runPerfTest( )
 {
@@ -1079,6 +1110,86 @@ void runPerfTest( )
 	printf( "%s %f ms, %d\n", typeid( T ).name(), sw.getMs(), nfound );
 }
 
+template <class T>
+void runConcurrentTest( )
+{ 
+	int NThreads = 32;
+	int NBuckets  = 10000;
+	int Numbers = 1000000;
+	double loadFactor = 0.75;
+
+	for (int k = 0; k < 100; k++ )
+	{
+		StdSet_Concurrent truth;
+		T storage( NBuckets );
+
+		for( int i = 0; i < NThreads; i++ )
+		{
+			int nItemPerThread = NBuckets * loadFactor / NThreads;
+			concurrency::parallel_for( 0, NThreads, [k, nItemPerThread, Numbers, &truth, &storage](int index) 
+			{
+				splitmix64 rnd;
+				rnd.x = k * 1000000 + index;
+				for( int j = 0; j < nItemPerThread; j++ )
+				{
+					uint32_t v = rnd.next() % Numbers;
+					storage.insert( v );
+					truth.insert( v );
+				}
+			} );
+		}
+		OROASSERT( truth.set() == storage.set(), 0 );
+
+		splitmix64 rnd;
+		for( int i = 0; i < NBuckets; i++ )
+		{
+			uint32_t v = rnd.next() % Numbers;
+			OROASSERT( storage.find( v ) == truth.find( v ), 0 );
+		}
+	}
+}
+template <class T>
+void runConcurrentPerfTest()
+{ 
+	int NThreads = 32;
+	int NBuckets = 100000;
+	int Numbers = 10000000;
+	double loadFactor = 0.75;
+
+
+	int nfound = 0;
+
+	float timeInsertion = 0;
+	float timeFind = 0;
+
+	Stopwatch sw;
+	sw.start();
+	
+	int a = 0;
+
+	for (int k = 0; k < 512; k++)
+	{
+		T storage( NBuckets );
+		for( int i = 0; i < NThreads; i++ )
+		{
+			int nItemPerThread = NBuckets * loadFactor / NThreads;
+			concurrency::parallel_for( 0, NThreads, [k, nItemPerThread, Numbers, &storage](int index) 
+			{
+				splitmix64 rnd;
+				rnd.x = k * 100000 + index;
+				for( int j = 0; j < nItemPerThread; j++ )
+				{
+					uint32_t v = rnd.next() % Numbers;
+					storage.insert( v );
+				}
+			} );
+		}
+		a += storage.m_table[0];
+	}
+	sw.stop();
+
+	printf( "con / %s insertion %f ms %d\n", typeid( T ).name(), sw.getMs(), a );
+}
 int main( int argc, char** argv )
 {
 	// Test
@@ -1088,11 +1199,12 @@ int main( int argc, char** argv )
 	runTest<BLPZeroEmptyBranchless>();
 	runTest<RH>();
 
-	runTest<LP_Concurrent>();
+	runConcurrentTest<LP_Concurrent>();
 
 	{
+		runConcurrentPerfTest<LP_Concurrent>();
+
 		runPerfTest<LP>();
-		runPerfTest<LP_Concurrent>();
 		runPerfTest<RH>();
 		runPerfTest<BLP>();
 		runPerfTest<BLPZeroEmpty>();
