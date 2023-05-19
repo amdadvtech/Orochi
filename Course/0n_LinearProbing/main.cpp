@@ -82,7 +82,7 @@ class LP
 		}
 		return -1;
 	}
-	int find( uint32_t k ) const
+	bool find( uint32_t k ) const
 	{
 		uint32_t h = home( k );
 		for( int i = 0; i < m_table.size(); i++ )
@@ -90,14 +90,14 @@ class LP
 			int location = ( h + i ) % m_table.size();
 			if( ( m_table[location] & OCCUPIED_BIT ) == 0 )
 			{
-				return -1;
+				return false;
 			}
 			else if( m_table[location] == ( k | OCCUPIED_BIT ) )
 			{
-				return location;
+				return true;
 			}
 		}
-		return -1;
+		return false;
 	}
 	std::set<uint32_t> set() const
 	{
@@ -145,7 +145,6 @@ class LP
 	std::vector<uint32_t> m_table;
 };
 
-// find on concurrent and serial have different behavior, will fix later.
 class StdSet_Concurrent
 {
   public:
@@ -326,7 +325,7 @@ class RH
 		}
 		return -1;
 	}
-	int find( uint32_t k ) const
+	bool find( uint32_t k ) const
 	{
 		uint32_t h = home( hash( k ) );
 		for( int i = 0; i < m_table.size(); i++ )
@@ -334,14 +333,14 @@ class RH
 			int location = ( h + i ) % m_table.size();
 			if( ( m_table[location] & OCCUPIED_BIT ) == 0 )
 			{
-				return -1;
+				return false;
 			}
 			else if( m_table[location] == ( k | OCCUPIED_BIT ) )
 			{
-				return location;
+				return true;
 			}
 		}
-		return -1;
+		return false;
 	}
 	std::set<uint32_t> set() const
 	{
@@ -537,16 +536,16 @@ class BLP
 		}
 		return -1;
 	}
-	int find( uint32_t k ) const
+	bool find( uint32_t k ) const
 	{
 		uint32_t h = home( k );
 		if( ( m_table[h] & OCCUPIED_BIT ) == 0 )
 		{
-			return -1;
+			return false;
 		}
 		if( m_table[h] == ( k | OCCUPIED_BIT ) )
 		{
-			return h;
+			return true;
 		}
 
 		uint32_t hashK = hash( k );
@@ -560,7 +559,7 @@ class BLP
 			}
 			if( m_table[j] == ( k | OCCUPIED_BIT ) )
 			{
-				return j;
+				return true;
 			}
 		}
 		else
@@ -571,10 +570,10 @@ class BLP
 			}
 			if( m_table[j] == ( k | OCCUPIED_BIT ) )
 			{
-				return j;
+				return true;
 			}
 		}
-		return -1;
+		return false;
 	}
 
 	std::set<uint32_t> set() const
@@ -752,7 +751,7 @@ class BLPZeroEmpty
 		}
 		return -1;
 	}
-	int find( uint32_t k ) const
+	bool find( uint32_t k ) const
 	{
 		k++;
 
@@ -760,11 +759,11 @@ class BLPZeroEmpty
 		uint32_t h = home( hashK );
 		if( m_table[h] == 0 )
 		{
-			return -1;
+			return false;
 		}
 		else if( m_table[h] == hashK )
 		{
-			return h;
+			return true;
 		}
 
 		bool moveTowardLeft = m_table[h] < hashK;
@@ -777,7 +776,7 @@ class BLPZeroEmpty
 			}
 			if( m_table[j] == hashK )
 			{
-				return j;
+				return true;
 			}
 		}
 		else
@@ -788,10 +787,10 @@ class BLPZeroEmpty
 			}
 			if( m_table[j] == hashK )
 			{
-				return j;
+				return true;
 			}
 		}
-		return -1;
+		return false;
 	}
 
 	std::set<uint32_t> set() const
@@ -969,7 +968,7 @@ class BLPZeroEmptyBranchless
 		}
 		return -1;
 	}
-	int find( uint32_t k ) const 
+	bool find( uint32_t k ) const 
 	{
 		k++;
 
@@ -978,11 +977,11 @@ class BLPZeroEmptyBranchless
 
 		if( m_table[h] == 0 )
 		{
-			return -1;
+			return false;
 		}
 		else if( m_table[h] == hashK )
 		{
-			return h;
+			return true;
 		}
 		int d = m_table[h] < hashK ? +1 : -1;
 		int j = h;
@@ -992,9 +991,9 @@ class BLPZeroEmptyBranchless
 		}
 		if( m_table[j] == hashK )
 		{
-			return j;
+			return true;
 		}
-		return -1;
+		return false;
 	}
 
 	std::set<uint32_t> set() const
@@ -1066,48 +1065,59 @@ void runTest( )
 		{
 			uint32_t v = rnd.next() % Numbers;
 			bool found0 = s.count( v ) != 0;
-			bool found1 = lp.find( v ) != -1;
+			bool found1 = lp.find( v );
 			OROASSERT( found0 == found1, 0 );
 		}
 	}
+	printf( "test / %s OK\n", typeid( T ).name() );
 }
-
-
 
 template<class T>
 void runPerfTest( )
 {
-	int NBuckets = 1000;
-	int Numbers = 10000;
+	int NBuckets = 100000;
+	int Numbers = 1000000;
 	double loadFactor = 0.75;
 
-	Stopwatch sw;
-	sw.start();
+	float timeInsert = 0;
+	float timeFind = 0;
 
 	int nfound = 0;
 	splitmix64 rnd;
-	for( int i = 0; i < 100000; i++ )
+	for( int i = 0; i < 1000; i++ )
 	{
 		T lp( NBuckets );
+
+		Stopwatch sw;
+		sw.start();
+
 		for( int j = 0; j < NBuckets * loadFactor; j++ )
 		{
 			uint32_t v = rnd.next() % Numbers;
 			lp.insert( v );
 		}
 
-		for( int i = 0; i < NBuckets * loadFactor; i++ )
+		sw.split();
+
+		for( int i = 0; i < NBuckets; i++ )
 		{
 			uint32_t v = rnd.next() % Numbers;
-			bool found = lp.find( v ) != -1;
+			bool found = lp.find( v );
 			if( found )
 			{
 				nfound++;
 			}
 		}
+
+		sw.stop();
+
+		float times[2];
+		sw.getMs( times, 2 );
+		timeInsert += times[0];
+		timeFind += times[1];
 	}
 
-	sw.stop();
-	printf( "%s %f ms, %d\n", typeid( T ).name(), sw.getMs(), nfound );
+	printf( "%s insert %f ms, find %f ms %d\n", typeid( T ).name(), timeInsert, timeFind, nfound );
 }
 
 template <class T>
@@ -1147,6 +1157,7 @@ void runConcurrentTest( )
 			OROASSERT( storage.find( v ) == truth.find( v ), 0 );
 		}
 	}
+	printf( "test con / %s OK\n", typeid( T ).name() );
 }
 template <class T>
 void runConcurrentPerfTest()
@@ -1205,6 +1216,7 @@ int main( int argc, char** argv )
 		runConcurrentPerfTest<LP_Concurrent>();
 
 		runPerfTest<LP>();
+		runPerfTest<LP_Concurrent>();
 		runPerfTest<RH>();
 		runPerfTest<BLP>();
 		runPerfTest<BLPZeroEmpty>();
