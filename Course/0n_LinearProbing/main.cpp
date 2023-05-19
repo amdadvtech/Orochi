@@ -3,6 +3,7 @@
 #include <memory>
 #include <set>
 #include <random>
+#include <Windows.h>
 
 // Reference
 // [0] Ordered hash tables ( original idea of BLP, very old )
@@ -41,6 +42,16 @@ uint32_t unhash( uint32_t x )
 
 const uint32_t OCCUPIED_BIT = 1 << 31;
 const uint32_t VALUE_MASK = ~OCCUPIED_BIT;
+using u32 = uint32_t;
+
+inline u32 atomicCAS( u32* address, u32 compare, u32 val )
+{
+	return InterlockedCompareExchange( address, val, compare );
+}
+inline u32 atomicRead( u32* address ) 
+{
+	return InterlockedExchangeAdd( address, 0 );
+}
 
 class LP
 {
@@ -131,6 +142,104 @@ class LP
 	}
 	std::vector<uint32_t> m_table;
 };
+
+
+class LP_Concurrent
+{
+  public:
+	LP_Concurrent( int n ) : m_table( n ) {}
+
+	int home( u32 k ) const { return hash( k ) % m_table.size(); }
+
+	enum InsertionResult
+	{
+		INSERTED,
+		FOUND,
+		OUT_OF_MEMORY
+	};
+	// k must be less than equal 0x7FFFFFFF
+	InsertionResult insert( u32 k )
+	{
+		u32 h = home( k );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			int location = ( h + i ) % m_table.size();
+			u32 r = atomicCAS( &m_table[location], 0 /* empty */, k | OCCUPIED_BIT );
+			if( r == 0 )
+			{
+				return INSERTED;
+			}
+			else if (r == (k | OCCUPIED_BIT))
+			{
+				return FOUND;
+			}
+		}
+		return OUT_OF_MEMORY;
+	}
+
+	int find( u32 k ) const
+	{
+		u32 h = home( k );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			int location = ( h + i ) % m_table.size();
+			if( ( m_table[location] & OCCUPIED_BIT ) == 0 )
+			{
+				return -1;
+			}
+			else if( m_table[location] == ( k | OCCUPIED_BIT ) )
+			{
+				return location;
+			}
+		}
+		return -1;
+	}
+	std::set<u32> set() const
+	{
+		std::set<u32> s;
+		for( auto value : m_table )
+		{
+			if( value & OCCUPIED_BIT )
+			{
+				s.insert( value & VALUE_MASK );
+			}
+		}
+		return s;
+	}
+
+	void print()
+	{
+		printf( "data=" );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			if( m_table[i] & OCCUPIED_BIT )
+			{
+				printf( "%03d, ", m_table[i] & VALUE_MASK );
+			}
+			else
+			{
+				printf( "---, " );
+			}
+		}
+		printf( "\n" );
+
+		printf( "home=" );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			if( m_table[i] & OCCUPIED_BIT )
+			{
+				printf( "%03d, ", home( m_table[i] & VALUE_MASK ) );
+			}
+			else
+			{
+				printf( "---, " );
+			}
+		}
+		printf( "\n" );
+	}
+	std::vector<u32> m_table;
+};
+
 class RH
 {
   public:
@@ -979,13 +1088,17 @@ int main( int argc, char** argv )
 	runTest<BLPZeroEmptyBranchless>();
 	runTest<RH>();
 
+	runTest<LP_Concurrent>();
+
 	{
 		runPerfTest<LP>();
+		runPerfTest<LP_Concurrent>();
 		runPerfTest<RH>();
 		runPerfTest<BLP>();
 		runPerfTest<BLPZeroEmpty>();
 		runPerfTest<BLPZeroEmptyBranchless>();
 	}
+	
 	//for(int i = 0 ; i < 10 ; i++)
 	//{
 	//	int NBuckets = 1000;
