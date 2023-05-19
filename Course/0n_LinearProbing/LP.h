@@ -213,6 +213,20 @@ class LP_Concurrent
 		}
 		return false;
 	}
+
+	DEVICE
+	float getOccupancy() const
+	{
+		int nOccupied = 0;
+		for (int i = 0; i < m_table.size(); i++)
+		{
+			if( m_table[i] & OCCUPIED_BIT )
+			{
+				nOccupied++;
+			}
+		}
+		return (float)nOccupied / m_table.size();
+	}
 #if !defined( __KERNELCC__ )
 	std::set<u32> set() const
 	{

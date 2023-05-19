@@ -1,10 +1,16 @@
 #include <common/Common.h>
 #include <LP.h>
 
-extern "C" __global__ void test( LP_Concurrent<false> lp )
+extern "C" __global__ void insert( LP_Concurrent<false> lp, int upper, int nItemsPerThread )
 { 
-	if( ( threadIdx.x % 2 ) == 0)
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+	splitmix64 rnd;
+	rnd.x = tid;
+
+	for( int i = 0; i < nItemsPerThread; i++ )
 	{
-		lp.insert( threadIdx.x );
+		int x = rnd.next() % upper;
+		lp.insert( x );
 	}
 }

@@ -1087,10 +1087,6 @@ public:
 	~LPSample() { 
 		oroStreamDestroy( m_stream ); 
 	}
-	oroCtx getContext() { return m_context; }
-	oroDevice getDevice() { return m_device; }
-	OrochiUtils* getOroUtil() { return &m_utils; }
-
 	void launch1D( const char* function, unsigned int gridDimX, unsigned int blockDimX, std::initializer_list<void*> args )
 	{
 		std::vector<const char*> opts = {
@@ -1100,8 +1096,12 @@ public:
 		oroFunction f = m_utils.getFunctionFromFile( m_device, "../0n_LinearProbing/Kernels.h", function, &opts );
 		oroModuleLaunchKernel( f, gridDimX, 1, 1, blockDimX, 1, 1, 0, m_stream, std::vector<void*>( args ).data(), 0 );
 	}
+	oroStream getStream() { return m_stream; }
 	oroStream m_stream = 0;
 };
+
+
+
 int main( int argc, char** argv )
 {
 	// Test
@@ -1125,18 +1125,41 @@ int main( int argc, char** argv )
 	}
 	LPSample sample;
 
-	LP_Concurrent<false> lpGpu( 100 );
-	sample.launch1D( "test", 4, 64, {
-		&lpGpu
-	} );
+	int BlockSize = 32;
+	int NBuckets = 100000000;
+	int Numbers = 10000000000;
+	double loadFactor = 0.75;
 
-	LP_Concurrent<true> lpCpu;
-	lpGpu.copyTo( &lpCpu );
+	int nItemsPerThread = 512;
+	int nBlocks = div_round_up( NBuckets * loadFactor / nItemsPerThread, BlockSize );
 
-	for (auto v : lpCpu.set())
+	for (int i = 0 ; i < 32 ; i++)
 	{
-		printf( "%d\n", v );
+		LP_Concurrent<false> lpGpu( NBuckets );
+
+		OroStopwatch oroStream( sample.getStream() );
+		oroStream.start();
+		sample.launch1D( "insert", nBlocks, BlockSize, {
+			&lpGpu,
+			&Numbers,
+			&nItemsPerThread
+		} );
+		oroStream.stop();
+		float ms = oroStream.getMs();
+		printf( "%f \n", ms );
+
+		LP_Concurrent<true> lpCpu;
+		lpGpu.copyTo( &lpCpu );
+		printf( "occupancy %f \n", lpCpu.getOccupancy() );
 	}
+
+	//LP_Concurrent<true> lpCpu;
+	//lpGpu.copyTo( &lpCpu );
+
+	//for (auto v : lpCpu.set())
+	//{
+	//	printf( "%d\n", v );
+	//}
 
 	//sample.getOroUtil()->getFunctionFromFile( sample.getOroUtil(), "../01_Reduction/Kernels.h", kernelName, &opts );
 	//const void* args[] = { &size, d_input.address(), d_output.address() };
