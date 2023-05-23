@@ -1153,6 +1153,31 @@ int main( int argc, char** argv )
 		printf( "occupancy %f \n", lpCpu.getOccupancy() );
 	}
 
+
+	// lock 
+	{
+		BufferGPU<u32> counter;
+		BufferGPU<u32> mutex;
+
+		counter.resize( 1 );
+		mutex.resize( 1 );
+
+		counter.fillZero();
+		mutex.fillZero();
+
+		sample.launch1D( "increment", 128, 32,
+						 {
+							 counter.dataPtr(),
+							 mutex.dataPtr(),
+						 } );
+
+		OrochiUtils::waitForCompletion();
+		u32 n;
+		counter.copyTo( &n );
+
+		printf( "n %d\n", n );
+	}
+
 	//LP_Concurrent<true> lpCpu;
 	//lpGpu.copyTo( &lpCpu );
 

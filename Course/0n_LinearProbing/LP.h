@@ -85,6 +85,19 @@ struct Buffer
 			OrochiUtils::copyDtoD( buffer->m_data, m_data, size() );
 		}
 	}
+	void copyTo( T* ptr )
+	{
+		if( isCpu )
+		{
+			memcpy( ptr, m_data, sizeof( T ) * size() );
+		}
+		else
+		{
+			OrochiUtils::copyDtoH( ptr, m_data, size() );
+		}
+	}
+
+	void** dataPtr() { return (void**)&m_data; }
 #endif
 	DEVICE
 	u32 size() const { return m_size; }

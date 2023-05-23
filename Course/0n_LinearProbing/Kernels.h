@@ -14,3 +14,35 @@ extern "C" __global__ void insert( LP_Concurrent<false> lp, int upper, int nItem
 		lp.insert( x );
 	}
 }
+//extern "C" __global__ void increment( u32 * counter, u32* mutex )
+//{
+//	while( atomicCAS( mutex, 0, 1 ) != 0 )
+//		;
+//
+//	__threadfence();
+//	( *counter )++;
+//	__threadfence();
+//	atomicExch( mutex, 0 );
+//}
+
+extern "C" __global__ void increment( u32* counter, u32* mutex )
+{
+	// workaround
+	u32 done = 0;
+	do
+	{
+		if( done == 0 && atomicCAS( mutex, 0, 1 ) == 0 )
+		{
+			__threadfence();
+
+			( *counter )++;
+
+			__threadfence();
+			atomicExch( mutex, 0 );
+
+			done = 1;
+		}
+	}
+	while( __all( done ) == false );
+	// while( __all_sync( 0xFFFFFFFF, done ) == false );
+}
