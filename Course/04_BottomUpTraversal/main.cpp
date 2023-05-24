@@ -3,53 +3,6 @@
 class BottomUpTraversalSample : public Sample
 {
   public:
-	void buildTree( const std::vector<int>& input, std::vector<Node>& nodes, std::vector<Leaf>& leaves ) 
-	{ 
-		Node root = { 0, input.size(), -1 };
-		nodes[0] = root;
-		int nodeCount = 1;
-
-		std::stack<int> stack;
-		stack.push( 0 );
-
-		while( !stack.empty() )
-		{
-			int nodeIndex = stack.top();
-			stack.pop();
-
-			Node& node = nodes[nodeIndex];
-			int l = node.m_left;
-			int r = node.m_right;
-			int m = ( l + r ) / 2;
-
-			if( m - l > 1 )
-			{
-				int childIndex = nodeCount++;
-				node.m_left = childIndex;
-				nodes[childIndex] = { l, m, nodeIndex };
-				stack.push( childIndex );
-			}
-			else
-			{
-				node.m_left = ~l;
-				leaves[l] = { input[l], nodeIndex };
-			}
-
-			if( r - m > 1 )
-			{
-				int childIndex = nodeCount++;
-				node.m_right = childIndex;
-				nodes[childIndex] = { m, r, nodeIndex };
-				stack.push( childIndex );
-			}
-			else
-			{
-				node.m_right = ~m;
-				leaves[m] = { input[m], nodeIndex };
-			}
-		}
-	}
-
 	void run( u32 size ) 
 	{ 
 		assert( size > 1 );
@@ -81,7 +34,7 @@ class BottomUpTraversalSample : public Sample
 					h_input[j] = distribution( generator );
 					h_sum += h_input[j];
 				}
-				buildTree( h_input, h_nodes, h_leaves );
+				TreeBuilder().build( h_input, h_nodes, h_leaves );
 				d_nodes.copyFromHost( h_nodes.data(), size - 1 );
 				d_leaves.copyFromHost( h_leaves.data(), size );
 
