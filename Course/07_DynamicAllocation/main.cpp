@@ -7,7 +7,7 @@ class DynamicAllocationSample : public Sample
 	{ 
 		assert( size > 1 );
 		std::default_random_engine generator;
-		std::uniform_int_distribution<int> distribution( 0, 16 );
+		std::uniform_int_distribution<int> distribution;
 		
 		oroDeviceProp prop;
 		CHECK_ORO( oroGetDeviceProperties( &prop, m_device ) );
@@ -29,7 +29,6 @@ class DynamicAllocationSample : public Sample
 
 		std::vector<const char*> opts;
 		opts.push_back( "-I../" );
-		opts.push_back( "-G");
 
 		Stopwatch sw;
 		auto test = [&]( const char* kernelName )
@@ -59,7 +58,7 @@ class DynamicAllocationSample : public Sample
 				int h_count = 0;
 				for( u32 j = 0; j < size; ++j )
 					if( h_queries[0] == h_input[j] ) ++h_count;
-				//OROASSERT( h_count == d_counts.getSingle(), 0 );
+				OROASSERT( h_count == d_counts.getSingle(), 0 );
 
 				float time = sw.getMs();
 				float speed = static_cast<float>( size ) / 1000.0f / 1000.0f / time;

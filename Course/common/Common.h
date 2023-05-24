@@ -30,6 +30,7 @@ struct alignas( 32 ) Node
 	int m_left;
 	int m_right;
 	int m_parent;
+	int m_pivot;
 };
 
 struct alignas( 8 ) Leaf
@@ -76,8 +77,10 @@ class Sample
 class TreeBuilder
 {
   public:
-	void build( const std::vector<int>& input, std::vector<Node>& nodes, std::vector<Leaf>& leaves )
+	void build( std::vector<int>& input, std::vector<Node>& nodes, std::vector<Leaf>& leaves )
 	{
+		std::sort( input.begin(), input.end() );
+
 		Node root = { 0, input.size(), -1 };
 		nodes[0] = root;
 		int nodeCount = 1;
@@ -94,6 +97,7 @@ class TreeBuilder
 			int l = node.m_left;
 			int r = node.m_right;
 			int m = ( l + r ) / 2;
+			node.m_pivot = input[m];
 
 			if( m - l > 1 )
 			{
