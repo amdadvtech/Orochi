@@ -1,4 +1,4 @@
-project "04_BottmUpTraversal"
+project "04_BottomUpTraversal"
       kind "ConsoleApp"
 
       targetdir "../bin/%{cfg.buildcfg}"

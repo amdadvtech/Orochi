@@ -43,6 +43,4 @@ extern "C" __global__ void ConvertToBFSKernel( u32 size, const Node* inNodes, co
 		}
 		if( !__any( !done ) ) break;
 	}
-
-
 }

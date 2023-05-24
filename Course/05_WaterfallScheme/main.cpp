@@ -1,6 +1,6 @@
 #include <common/Common.h>
 
-class BottomUpTraversalSample : public Sample
+class WaterfallSchemeSample : public Sample
 {
   public:
 	void buildTree( const std::vector<int>& input, std::vector<Node>& nodes, std::vector<Leaf>& leaves ) 
@@ -113,7 +113,7 @@ class BottomUpTraversalSample : public Sample
 
 int main( int argc, char** argv )
 {
-	BottomUpTraversalSample sample;
+	WaterfallSchemeSample sample;
 	sample.run( 16 );
 	sample.run( 16 * 1000 * 1 );
 	sample.run( 16 * 1000 * 10 );

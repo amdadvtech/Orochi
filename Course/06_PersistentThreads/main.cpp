@@ -1,6 +1,6 @@
 #include <common/Common.h>
 
-class WritingOutputSample : public Sample
+class PersistentThreadsSample : public Sample
 {
   public:
 	void run( u32 size ) 
@@ -64,7 +64,7 @@ class WritingOutputSample : public Sample
 
 int main( int argc, char** argv )
 {
-	WritingOutputSample sample;
+	PersistentThreadsSample sample;
 	sample.run( 16 * 1000 * 1 );
 	sample.run( 16 * 1000 * 10 );
 	sample.run( 16 * 1000 * 100 );
