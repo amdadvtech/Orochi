@@ -427,6 +427,7 @@ void hipewInit( int* resultDriver, int* resultRtc, hipuint32_t flags )
   HIP_LIBRARY_FIND_CHECKED(hipFuncGetAttribute);
   HIP_LIBRARY_FIND_CHECKED(hipFuncSetCacheConfig);
   HIP_LIBRARY_FIND_CHECKED(hipModuleLaunchKernel);
+  HIP_LIBRARY_FIND_CHECKED(hipDrvOccupancyMaxActiveBlocksPerMultiprocessor);
   HIP_LIBRARY_FIND_CHECKED(hipModuleOccupancyMaxPotentialBlockSize);
   HIP_LIBRARY_FIND_CHECKED(hipTexRefSetArray);
   HIP_LIBRARY_FIND_CHECKED(hipTexRefSetAddress);

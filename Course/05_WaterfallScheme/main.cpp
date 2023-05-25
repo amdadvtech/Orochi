@@ -21,7 +21,6 @@ class WaterfallSchemeSample : public Sample
 		
 		std::vector<const char*> opts;
 		opts.push_back( "-I../" );
-		opts.push_back( "-G" );
 
 		Stopwatch sw;
 		auto test = [&]( const char* kernelName )

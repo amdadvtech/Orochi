@@ -689,6 +689,15 @@ oroError OROAPI oroModuleLaunchKernel(oroFunction f, unsigned int gridDimX, unsi
 	return oroErrorUnknown;
 }
 
+oroError OROAPI oroDrvOccupancyMaxActiveBlocksPerMultiprocessor(int* numBlocks, oroFunction func, int blockSize, size_t dynamicSMemSize)
+{
+	if( s_api & ORO_API_CUDADRIVER )
+		return cu2oro( cuOccupancyMaxActiveBlocksPerMultiprocessor( numBlocks, (CUfunction)func, blockSize, dynamicSMemSize ) );
+	else
+		return hip2oro( hipDrvOccupancyMaxActiveBlocksPerMultiprocessor( numBlocks, (hipFunction_t)func, blockSize, dynamicSMemSize ) );
+	return oroErrorUnknown;
+}
+
 oroError OROAPI oroModuleOccupancyMaxPotentialBlockSize( int* minGridSize, int* blockSize, oroFunction func, size_t dynamicSMemSize, int blockSizeLimit ) 
 { 
 	if( s_api & ORO_API_CUDADRIVER )

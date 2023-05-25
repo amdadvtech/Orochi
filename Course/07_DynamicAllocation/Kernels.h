@@ -26,7 +26,7 @@ class Stack
 		}
 		m_lock = &locks[warpHash];
 
-		const u32 offset = activeWarps + laneIndex + ( warpHash * warpSize ) * stackSize;
+		u32 offset = activeWarps + laneIndex + ( warpHash * warpSize ) * stackSize;
 		m_buffer = stackBuffer + offset;
 		m_size = stackSize;
 	}

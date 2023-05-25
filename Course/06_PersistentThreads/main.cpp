@@ -20,14 +20,14 @@ class PersistentThreadsSample : public Sample
 
 		oroDeviceProp prop;
 		CHECK_ORO( oroGetDeviceProperties( &prop, m_device ) );
-		u32 warpSize = prop.gcnArch >= 1010 || std::string( prop.name ).find( "NVIDIA" ) != std::string::npos ? 32u : 64u;
 
 		Stopwatch sw;
 		auto test = [&]( const char* kernelName )
 		{
-			// TODO: use the exact formula
-			u32 threads = prop.multiProcessorCount * warpSize;
 			oroFunction func = m_utils.getFunctionFromFile( m_device, "../06_PersistentThreads/Kernels.h", kernelName, &opts );
+			int blockCount;
+			CHECK_ORO( oroDrvOccupancyMaxActiveBlocksPerMultiprocessor( &blockCount, func, BlockSize, 0 ) );
+			u32 threads = prop.multiProcessorCount * blockCount * prop.warpSize;
 			const void* args[] = { &size, &threads, &Bins, d_input.address(), d_output.address(), d_counter.address() };
 			for( u32 i = 0; i < RunCount; ++i )
 			{
