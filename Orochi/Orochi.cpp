@@ -694,7 +694,7 @@ oroError OROAPI oroDrvOccupancyMaxActiveBlocksPerMultiprocessor(int* numBlocks, 
 	if( s_api & ORO_API_CUDADRIVER )
 		return cu2oro( cuOccupancyMaxActiveBlocksPerMultiprocessor( numBlocks, (CUfunction)func, blockSize, dynamicSMemSize ) );
 	else
-		return hip2oro( hipDrvOccupancyMaxActiveBlocksPerMultiprocessor( numBlocks, (hipFunction_t)func, blockSize, dynamicSMemSize ) );
+		return hip2oro( hipModuleOccupancyMaxActiveBlocksPerMultiprocessor( numBlocks, (hipFunction_t)func, blockSize, dynamicSMemSize ) );
 	return oroErrorUnknown;
 }
 
