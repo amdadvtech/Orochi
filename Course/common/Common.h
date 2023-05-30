@@ -55,6 +55,9 @@ class Sample
 	static constexpr int RunCount = 4;
 	static constexpr int BlockSize = 1024;
 
+	Sample( const Sample& ) = delete;
+	Sample& operator=( const Sample& other ) = delete;
+
 	Sample()
 	{
 		oroInitialize( (oroApi)( ORO_API_HIP | ORO_API_CUDA ), 0 );
@@ -68,7 +71,7 @@ class Sample
 		std::cout << "Executing on '" << props.name << "'" << std::endl;
 	}
 
-	~Sample() { CHECK_ORO( oroCtxDestroy( m_context ) ); }
+	virtual ~Sample() { CHECK_ORO( oroCtxDestroy( m_context ) ); }
 
   protected:
 	oroCtx m_context;
