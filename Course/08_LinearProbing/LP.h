@@ -155,9 +155,6 @@ inline u32 unhash( u32 x )
 	return x;
 }
 
-const u32 OCCUPIED_BIT = 1 << 31;
-const u32 VALUE_MASK = ~OCCUPIED_BIT;
-
 #if !defined( __KERNELCC__ )
 inline u32 atomicCAS( u32* address, u32 compare, u32 val )
 {
@@ -168,6 +165,12 @@ inline u32 atomicCAS( u32* address, u32 compare, u32 val )
 template <bool isCpu>
 class LP_Concurrent
 {
+	enum
+	{
+		OCCUPIED_BIT = 1 << 31,
+		VALUE_MASK = ~OCCUPIED_BIT,
+	};
+
   public:
 #if !defined( __KERNELCC__ )
 	LP_Concurrent() {}

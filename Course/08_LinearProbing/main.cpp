@@ -22,6 +22,12 @@
 class LP
 {
   public:
+	enum
+	{
+		OCCUPIED_BIT = 1 << 31,
+		VALUE_MASK = ~OCCUPIED_BIT,
+	};
+
 	LP( int n ) : m_table( n ) {}
 
 	int home( uint32_t k ) const { return hash( k ) % m_table.size(); }
@@ -136,11 +142,15 @@ class StdSet_Concurrent
 	// int m_table[1];
 };
 
-
-
 class RH
 {
   public:
+	enum
+	{
+		OCCUPIED_BIT = 1 << 31,
+		VALUE_MASK = ~OCCUPIED_BIT,
+	};
+
 	RH( int n ) : m_table( n ) {}
 
 	uint32_t home( uint32_t h ) const { return (uint64_t)h * m_table.size() / ( (uint64_t)UINT_MAX + 1 ); }
@@ -274,6 +284,12 @@ class RH
 class BLP
 {
   public:
+	enum
+	{
+		OCCUPIED_BIT = 1 << 31,
+		VALUE_MASK = ~OCCUPIED_BIT,
+	};
+
 	BLP( int n ) : m_table( n ) {}
 
 	uint32_t home( uint32_t k ) const
@@ -490,9 +506,213 @@ class BLP
 	std::vector<uint32_t> m_table;
 };
 
+class BLP_Concurrent
+{
+  public:
+	enum
+	{
+		OCCUPIED_BIT = 1 << 31,
+		LOCK_BIT = 1 << 30,
+		VALUE_MASK = ~( OCCUPIED_BIT | LOCK_BIT ),
+		EMPTY = 0,
+		EMPTY_LOCKED = LOCK_BIT,
+	};
+
+	BLP_Concurrent( int n ) : m_table( n ) {}
+
+	uint32_t home( uint32_t k ) const
+	{
+		uint32_t hashK = hash( k );
+		return (uint64_t)hashK * m_table.size() / ( (uint64_t)UINT_MAX + 1 );
+	}
+
+	bool find( uint32_t k, uint32_t hashK, uint32_t j ) const
+	{
+		int dir = hash( m_table[j] & VALUE_MASK ) < hashK ? +1 : -1;
+		while( j < m_table.size() && ( m_table[j] & OCCUPIED_BIT ) && ( (int64_t)hash( m_table[j] & VALUE_MASK ) - (int64_t)hashK ) * dir < 0 )
+		{
+			j += dir;
+		}
+		return j < m_table.size() && ( m_table[j] & ( VALUE_MASK | OCCUPIED_BIT ) ) == ( k | OCCUPIED_BIT );
+	}
+	enum InsertionResult
+	{
+		INSERTED,
+		FOUND,
+		OUT_OF_MEMORY
+	};
+
+	// try to acquire a lock but it is ignored if the location is out of bounds
+	// return true if it is succeeded.
+	bool tryLock( uint32_t location )
+	{
+		if( location < m_table.size() )
+		{
+			return atomicCAS( &m_table[location], EMPTY, EMPTY_LOCKED ) == EMPTY;
+		}
+		return true;
+	}
+
+	// unlock the acquired lock but it is ignored if the location is out of bounds
+	void unlock( uint32_t location )
+	{
+		if( location < m_table.size() )
+		{
+			atomicCAS( &m_table[location], EMPTY_LOCKED, EMPTY ); 
+		}
+	}
+
+	// k must be less than equal 0x3FFFFFFF
+	InsertionResult insert( uint32_t k )
+	{
+	retry:
+		uint32_t h = home( k );
+		uint32_t oldval = atomicCAS( &m_table[h], EMPTY, k | OCCUPIED_BIT );
+		if( oldval == EMPTY )
+		{
+			return INSERTED;
+		}
+		else if ( oldval == ( k | OCCUPIED_BIT ) )
+		{
+			return FOUND;
+		}
+		else if( oldval == EMPTY_LOCKED )
+		{
+			goto retry;
+		}
+
+		uint32_t hashK = hash( k );
+		if( find( k, hashK, h ) )
+		{
+			return FOUND;
+		}
+
+		uint32_t t_left = h - 1;
+		uint32_t t_right = h + 1;
+
+		while( t_left < m_table.size() && ( m_table[t_left] & OCCUPIED_BIT ) )
+		{
+			t_left--;
+		}
+		while( t_right < m_table.size() && ( m_table[t_right] & OCCUPIED_BIT ) )
+		{
+			t_right++;
+		}
+
+		if( m_table.size() <= t_left && m_table.size() <= t_right )
+		{
+			return OUT_OF_MEMORY;
+		}
+
+		// TryLock
+		if( tryLock( t_left ) == false )
+		{
+			goto retry; 
+		}
+		if( tryLock( t_right ) == false )
+		{
+			unlock( t_left );
+			goto retry;
+		}
+		
+		// It is possible to got some changes during lock process. So check again.
+		if( find( k, hashK, h ) )
+		{
+			unlock( t_left );
+			unlock( t_right );
+			return FOUND;
+		}
+
+		int dir = hash( m_table[h] & VALUE_MASK ) < hashK ? +1 : -1;
+
+		// if t_left is not empty, you can't move toward left
+		if( m_table.size() <= t_left )
+		{
+			dir = -1;
+		}
+		// if t_right is not empty, you can't move toward right
+		if( m_table.size() <= t_right )
+		{
+			dir = +1;
+		}
+
+		uint32_t j = 0 < dir ? t_left : t_right;
+		while (
+			j + dir < m_table.size() &&
+			(m_table[j + dir] & OCCUPIED_BIT) &&
+			( (int64_t)hash(m_table[j + dir] & VALUE_MASK) - (int64_t)hashK ) * dir < 0
+			)
+		{
+			m_table[j] = m_table[j + dir];
+			j += dir;
+		}
+
+		m_table[j] = k | OCCUPIED_BIT;
+		unlock( t_left );
+		unlock( t_right );
+
+		return INSERTED;
+	}
+	bool find( uint32_t k ) const
+	{
+		uint32_t h = home( k );
+		uint32_t hashK = hash( k );
+		return find( k, hashK, h );
+	}
+
+	std::set<uint32_t> set() const
+	{
+		std::set<uint32_t> s;
+		for( auto value : m_table )
+		{
+			if( value & OCCUPIED_BIT )
+			{
+				s.insert( value & VALUE_MASK );
+			}
+		}
+		return s;
+	}
+
+	void print()
+	{
+		printf( "data=" );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			if( m_table[i] & OCCUPIED_BIT )
+			{
+				printf( "%02d, ", m_table[i] & ~OCCUPIED_BIT );
+			}
+			else
+			{
+				printf( "--, " );
+			}
+		}
+		printf( "\nhome=" );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			printf( "%02d, ", home( m_table[i] & ~OCCUPIED_BIT ) );
+		}
+		printf( "\n" );
+
+		printf( "hash=" );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			printf( "%x, ", hash( m_table[i] & VALUE_MASK ) );
+		}
+		printf( "\n" );
+	}
+	std::vector<uint32_t> m_table;
+};
+
 class BLPZeroEmpty
 {
   public:
+	enum
+	{
+		OCCUPIED_BIT = 1 << 31,
+		VALUE_MASK = ~OCCUPIED_BIT,
+	};
+
 	BLPZeroEmpty( int n ) : m_table( n ) {}
 
 	uint32_t home( uint32_t hashValue ) const { return (uint64_t)hashValue * m_table.size() / ( (uint64_t)UINT_MAX + 1 ); }
@@ -709,7 +929,12 @@ class BLPZeroEmpty
 
 class BLPZeroEmptyBranchless
 {
-  public:
+public:
+	enum
+	{
+		OCCUPIED_BIT = 1 << 31,
+		VALUE_MASK = ~OCCUPIED_BIT,
+	};
 	BLPZeroEmptyBranchless( int n ) : m_table( n ) {}
 
 	uint32_t home( uint32_t hashValue ) const { return (uint64_t)hashValue * m_table.size() / ( (uint64_t)UINT_MAX + 1 ); }
@@ -1104,25 +1329,82 @@ public:
 
 int main( int argc, char** argv )
 {
-	// Test
-	//runTest<LP>();
-	//runTest<BLP>();
-	//runTest<BLPZeroEmpty>();
-	//runTest<BLPZeroEmptyBranchless>();
-	//runTest<RH>();
+	// 6
+	//{
+	//	BLP_Concurrent blp( 10 );
+	//	blp.insert( 56 );
+	//	blp.print();
+	//	blp.insert( 48 );
+	//	blp.print();
+	//	blp.insert( 69 );
+	//	blp.print();
 
-	// runConcurrentTest<LP_ConcurrentCPU>();
+	//	printf( "" );
+	//}
 
 	//{
-	//	runConcurrentPerfTest<LP_ConcurrentCPU>();
+	//	int NBuckets = 1000;
+	//	int Numbers = 10000;
+	//	splitmix64 rnd;
 
-	//	runPerfTest<LP>();
-	//	runPerfTest<LP_ConcurrentCPU>();
-	//	runPerfTest<RH>();
-	//	runPerfTest<BLP>();
-	//	runPerfTest<BLPZeroEmpty>();
-	//	runPerfTest<BLPZeroEmptyBranchless>();
+	//	for( int i = 0; i < 10000; i++ )
+	//	{
+	//		BLP blp( NBuckets );
+	//		BLP_Concurrent blpc( NBuckets );
+	//		for( int j = 0; j < NBuckets * 1.75; j++ )
+	//		{
+	//			uint32_t v = rnd.next() % Numbers;
+	//			blp.insert( v );
+	//			blpc.insert( v );
+	//		}
+
+	//		for (int i = 0; i < NBuckets; i++)
+	//		{
+	//			OROASSERT( blp.m_table[i] == blpc.m_table[i], 0 );
+	//		}
+	//	}
 	//}
+
+	//runTest<BLP_Concurrent>();
+	//runConcurrentPerfTest<LP_ConcurrentCPU>();
+	//runConcurrentPerfTest<BLP_Concurrent>();
+
+	//runPerfTest<LP_ConcurrentCPU>();
+	//runPerfTest<BLP_Concurrent>();
+	//blp.insert( 69 ); // 6 on the left side
+	//blp.print();
+	//blp.insert( 158 );
+	//blp.insert( 90 );
+	//blp.insert( 35 );
+	//blp.insert( 179 );
+	// blp.print();
+	// 
+	// Test
+	printf( "--- Test ---\n" );
+	runTest<LP>();
+	runTest<BLP>();
+	runTest<BLPZeroEmpty>();
+	runTest<BLPZeroEmptyBranchless>();
+	runTest<RH>();
+	runTest<LP_ConcurrentCPU>();
+	runTest<BLP_Concurrent>();
+
+	runConcurrentTest<LP_ConcurrentCPU>();
+	runConcurrentTest<BLP_Concurrent>();
+
+	printf( "--- perf ---\n" );
+	{
+		runConcurrentPerfTest<LP_ConcurrentCPU>();
+		runConcurrentPerfTest<BLP_Concurrent>();
+
+		runPerfTest<LP>();
+		runPerfTest<LP_ConcurrentCPU>();
+		runPerfTest<BLP_Concurrent>();
+		runPerfTest<RH>();
+		runPerfTest<BLP>();
+		runPerfTest<BLPZeroEmpty>();
+		runPerfTest<BLPZeroEmptyBranchless>();
+	}
 	LPSample sample;
 
 	int BlockSize = 32;
@@ -1133,50 +1415,50 @@ int main( int argc, char** argv )
 	int nItemsPerThread = 512;
 	int nBlocks = div_round_up( NBuckets * loadFactor / nItemsPerThread, BlockSize );
 
-	for (int i = 0 ; i < 32 ; i++)
-	{
-		LP_Concurrent<false> lpGpu( NBuckets );
+	//for (int i = 0 ; i < 32 ; i++)
+	//{
+	//	LP_Concurrent<false> lpGpu( NBuckets );
 
-		OroStopwatch oroStream( sample.getStream() );
-		oroStream.start();
-		sample.launch1D( "insert", nBlocks, BlockSize, {
-			&lpGpu,
-			&Numbers,
-			&nItemsPerThread
-		} );
-		oroStream.stop();
-		float ms = oroStream.getMs();
-		printf( "%f \n", ms );
+	//	OroStopwatch oroStream( sample.getStream() );
+	//	oroStream.start();
+	//	sample.launch1D( "insert", nBlocks, BlockSize, {
+	//		&lpGpu,
+	//		&Numbers,
+	//		&nItemsPerThread
+	//	} );
+	//	oroStream.stop();
+	//	float ms = oroStream.getMs();
+	//	printf( "%f \n", ms );
 
-		LP_Concurrent<true> lpCpu;
-		lpGpu.copyTo( &lpCpu );
-		printf( "occupancy %f \n", lpCpu.getOccupancy() );
-	}
+	//	LP_Concurrent<true> lpCpu;
+	//	lpGpu.copyTo( &lpCpu );
+	//	printf( "occupancy %f \n", lpCpu.getOccupancy() );
+	//}
 
 
 	// lock 
-	{
-		BufferGPU<u32> counter;
-		BufferGPU<u32> mutex;
+	//{
+	//	BufferGPU<u32> counter;
+	//	BufferGPU<u32> mutex;
 
-		counter.resize( 1 );
-		mutex.resize( 1 );
+	//	counter.resize( 1 );
+	//	mutex.resize( 1 );
 
-		counter.fillZero();
-		mutex.fillZero();
+	//	counter.fillZero();
+	//	mutex.fillZero();
 
-		sample.launch1D( "increment", 128, 32,
-						 {
-							 counter.dataPtr(),
-							 mutex.dataPtr(),
-						 } );
+	//	sample.launch1D( "increment", 128, 32,
+	//					 {
+	//						 counter.dataPtr(),
+	//						 mutex.dataPtr(),
+	//					 } );
 
-		OrochiUtils::waitForCompletion();
-		u32 n;
-		counter.copyTo( &n );
+	//	OrochiUtils::waitForCompletion();
+	//	u32 n;
+	//	counter.copyTo( &n );
 
-		printf( "n %d\n", n );
-	}
+	//	printf( "n %d\n", n );
+	//}
 
 	//LP_Concurrent<true> lpCpu;
 	//lpGpu.copyTo( &lpCpu );
