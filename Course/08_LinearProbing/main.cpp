@@ -506,6 +506,7 @@ class BLP
 	std::vector<uint32_t> m_table;
 };
 
+#if 0
 class BLP_Concurrent
 {
   public:
@@ -703,6 +704,8 @@ class BLP_Concurrent
 	}
 	std::vector<uint32_t> m_table;
 };
+
+#endif
 
 class BLPZeroEmpty
 {
@@ -1379,7 +1382,7 @@ int main( int argc, char** argv )
 	//blp.insert( 179 );
 	// blp.print();
 	// 
-	// Test
+
 	printf( "--- Test ---\n" );
 	runTest<LP>();
 	runTest<BLP>();
@@ -1387,53 +1390,54 @@ int main( int argc, char** argv )
 	runTest<BLPZeroEmptyBranchless>();
 	runTest<RH>();
 	runTest<LP_ConcurrentCPU>();
-	runTest<BLP_Concurrent>();
+	runTest<BLP_ConcurrentCPU>();
 
 	runConcurrentTest<LP_ConcurrentCPU>();
-	runConcurrentTest<BLP_Concurrent>();
+	runConcurrentTest<BLP_ConcurrentCPU>();
 
 	printf( "--- perf ---\n" );
 	{
 		runConcurrentPerfTest<LP_ConcurrentCPU>();
-		runConcurrentPerfTest<BLP_Concurrent>();
+		runConcurrentPerfTest<BLP_ConcurrentCPU>();
 
 		runPerfTest<LP>();
 		runPerfTest<LP_ConcurrentCPU>();
-		runPerfTest<BLP_Concurrent>();
+		runPerfTest<BLP_ConcurrentCPU>();
 		runPerfTest<RH>();
 		runPerfTest<BLP>();
 		runPerfTest<BLPZeroEmpty>();
 		runPerfTest<BLPZeroEmptyBranchless>();
 	}
+
 	LPSample sample;
 
 	int BlockSize = 32;
 	int NBuckets = 100000000;
-	int Numbers = 10000000000;
+	int Numbers = 1000000000;
 	double loadFactor = 0.75;
 
 	int nItemsPerThread = 512;
 	int nBlocks = div_round_up( NBuckets * loadFactor / nItemsPerThread, BlockSize );
 
-	//for (int i = 0 ; i < 32 ; i++)
-	//{
-	//	LP_Concurrent<false> lpGpu( NBuckets );
+	for (int i = 0 ; i < 32 ; i++)
+	{
+		LP_Concurrent<false> lpGpu( NBuckets );
 
-	//	OroStopwatch oroStream( sample.getStream() );
-	//	oroStream.start();
-	//	sample.launch1D( "insert", nBlocks, BlockSize, {
-	//		&lpGpu,
-	//		&Numbers,
-	//		&nItemsPerThread
-	//	} );
-	//	oroStream.stop();
-	//	float ms = oroStream.getMs();
-	//	printf( "%f \n", ms );
+		OroStopwatch oroStream( sample.getStream() );
+		oroStream.start();
+		sample.launch1D( "insert", nBlocks, BlockSize, {
+			&lpGpu,
+			&Numbers,
+			&nItemsPerThread
+		} );
+		oroStream.stop();
+		float ms = oroStream.getMs();
+		printf( "%f \n", ms );
 
-	//	LP_Concurrent<true> lpCpu;
-	//	lpGpu.copyTo( &lpCpu );
-	//	printf( "occupancy %f \n", lpCpu.getOccupancy() );
-	//}
+		LP_Concurrent<true> lpCpu;
+		lpGpu.copyTo( &lpCpu );
+		printf( "occupancy %f \n", lpCpu.getOccupancy() );
+	}
 
 
 	// lock 

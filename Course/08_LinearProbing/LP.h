@@ -304,3 +304,215 @@ class LP_Concurrent
 
 using LP_ConcurrentCPU = LP_Concurrent<true>;
 using LP_ConcurrentGPU = LP_Concurrent<false>;
+
+template<int isCpu>
+class BLP_Concurrent
+{
+  public:
+	enum
+	{
+		OCCUPIED_BIT = 1 << 31,
+		LOCK_BIT = 1 << 30,
+		VALUE_MASK = ~( OCCUPIED_BIT | LOCK_BIT ),
+		EMPTY = 0,
+		EMPTY_LOCKED = LOCK_BIT,
+	};
+
+#if !defined( __KERNELCC__ )
+	BLP_Concurrent() {}
+	BLP_Concurrent( int n )
+	{
+		m_table.resize( n );
+		m_table.fillZero();
+	}
+#endif
+	DEVICE
+	u32 home( u32 k ) const
+	{
+		u32 hashK = hash( k );
+		return static_cast<u32>( static_cast<u64>( hashK ) * m_table.size() / ( static_cast<u64>( 0xFFFFFFFF ) + 1 ) );
+	}
+	DEVICE
+	bool find( u32 k, u32 hashK, u32 j ) const
+	{
+		int dir = hash( m_table[j] & VALUE_MASK ) < hashK ? +1 : -1;
+		while( j < m_table.size() && ( m_table[j] & OCCUPIED_BIT ) && ( (i64)hash( m_table[j] & VALUE_MASK ) - (i64)hashK ) * dir < 0 )
+		{
+			j += dir;
+		}
+		return j < m_table.size() && ( m_table[j] & ( VALUE_MASK | OCCUPIED_BIT ) ) == ( k | OCCUPIED_BIT );
+	}
+	enum InsertionResult
+	{
+		INSERTED,
+		FOUND,
+		OUT_OF_MEMORY
+	};
+
+	// try to acquire a lock but it is ignored if the location is out of bounds
+	// return true if it is succeeded.
+	DEVICE
+	bool tryLock( u32 location )
+	{
+		if( location < m_table.size() )
+		{
+			return atomicCAS( &m_table[location], EMPTY, EMPTY_LOCKED ) == EMPTY;
+		}
+		return true;
+	}
+
+	// unlock the acquired lock but it is ignored if the location is out of bounds
+	DEVICE
+	void unlock( u32 location )
+	{
+		if( location < m_table.size() )
+		{
+			atomicCAS( &m_table[location], EMPTY_LOCKED, EMPTY );
+		}
+	}
+
+	// k must be less than equal 0x3FFFFFFF
+	DEVICE
+	InsertionResult insert( u32 k )
+	{
+	retry:
+		u32 h = home( k );
+		u32 oldval = atomicCAS( &m_table[h], EMPTY, k | OCCUPIED_BIT );
+		if( oldval == EMPTY )
+		{
+			return INSERTED;
+		}
+		else if( oldval == ( k | OCCUPIED_BIT ) )
+		{
+			return FOUND;
+		}
+		else if( oldval == EMPTY_LOCKED )
+		{
+			goto retry;
+		}
+
+		u32 hashK = hash( k );
+		if( find( k, hashK, h ) )
+		{
+			return FOUND;
+		}
+
+		u32 t_left = h - 1;
+		u32 t_right = h + 1;
+
+		while( t_left < m_table.size() && ( m_table[t_left] & OCCUPIED_BIT ) )
+		{
+			t_left--;
+		}
+		while( t_right < m_table.size() && ( m_table[t_right] & OCCUPIED_BIT ) )
+		{
+			t_right++;
+		}
+
+		if( m_table.size() <= t_left && m_table.size() <= t_right )
+		{
+			return OUT_OF_MEMORY;
+		}
+
+		// TryLock
+		if( tryLock( t_left ) == false )
+		{
+			goto retry;
+		}
+		if( tryLock( t_right ) == false )
+		{
+			unlock( t_left );
+			goto retry;
+		}
+
+		// It is possible to got some changes during lock process. So check again.
+		if( find( k, hashK, h ) )
+		{
+			unlock( t_left );
+			unlock( t_right );
+			return FOUND;
+		}
+
+		int dir = hash( m_table[h] & VALUE_MASK ) < hashK ? +1 : -1;
+
+		// if t_left is not empty, you can't move toward left
+		if( m_table.size() <= t_left )
+		{
+			dir = -1;
+		}
+		// if t_right is not empty, you can't move toward right
+		if( m_table.size() <= t_right )
+		{
+			dir = +1;
+		}
+
+		u32 j = 0 < dir ? t_left : t_right;
+		while( j + dir < m_table.size() && ( m_table[j + dir] & OCCUPIED_BIT ) && ( (i64)hash( m_table[j + dir] & VALUE_MASK ) - (i64)hashK ) * dir < 0 )
+		{
+			m_table[j] = m_table[j + dir];
+			j += dir;
+		}
+
+		m_table[j] = k | OCCUPIED_BIT;
+		unlock( t_left );
+		unlock( t_right );
+
+		return INSERTED;
+	}
+
+	DEVICE
+	bool find( u32 k ) const
+	{
+		u32 h = home( k );
+		u32 hashK = hash( k );
+		return find( k, hashK, h );
+	}
+#if !defined( __KERNELCC__ )
+	std::set<u32> set() const
+	{
+		std::set<u32> s;
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			auto value = m_table[i];
+			if( value & OCCUPIED_BIT )
+			{
+				s.insert( value & VALUE_MASK );
+			}
+		}
+		return s;
+	}
+
+	void print()
+	{
+		printf( "data=" );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			if( m_table[i] & OCCUPIED_BIT )
+			{
+				printf( "%02d, ", m_table[i] & ~OCCUPIED_BIT );
+			}
+			else
+			{
+				printf( "--, " );
+			}
+		}
+		printf( "\nhome=" );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			printf( "%02d, ", home( m_table[i] & ~OCCUPIED_BIT ) );
+		}
+		printf( "\n" );
+
+		printf( "hash=" );
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			printf( "%x, ", hash( m_table[i] & VALUE_MASK ) );
+		}
+		printf( "\n" );
+	}
+#endif
+	Buffer<u32, isCpu> m_table;
+};
+
+using BLP_ConcurrentCPU = BLP_Concurrent<true>;
+using BLP_ConcurrentGPU = BLP_Concurrent<false>;
