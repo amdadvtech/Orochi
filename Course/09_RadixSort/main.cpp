@@ -1,8 +1,8 @@
 #include <09_RadixSort/Configs.h>
 #include <common/Common.h>
+#include <iostream>
 #include <string>
 #include <vector>
-#include <iostream>
 
 namespace
 {
@@ -38,7 +38,7 @@ class RadixSortSample : public Sample
 
 	void run( int testSize, const int testBits = 32, const int nRuns = 1 )
 	{
-		printf( "Start Testing !!!\n" );
+		std::cout << "Start testing, input size: " << testSize << std::endl;
 
 		srand( 123 );
 
@@ -62,6 +62,8 @@ class RadixSortSample : public Sample
 			sort( gpu_src, gpu_dst, testSize );
 			OrochiUtils::waitForCompletion();
 		}
+
+		std::cout << "GPU Radix Sort completed. Verifying with the CPU sorting results. " << std::endl;
 
 		std::vector<u32> dstKey( testSize );
 		OrochiUtils::copyDtoH( dstKey.data(), gpu_dst.ptr(), testSize );
@@ -136,22 +138,15 @@ class RadixSortSample : public Sample
 
 		int nItemPerWG = nItemsPerWI * WG_SIZE;
 
-		auto t1 = src.getData();
-
-
 		{
 			const void* args[] = { arg_cast( src.address() ), arg_cast( tmp_buffer.address() ), &n, &nItemPerWG, &startBit, &nWGsToExecute };
 			OrochiUtils::launch1D( oroFunctions[Kernel::COUNT], COUNT_WG_SIZE * nWGsToExecute, args, COUNT_WG_SIZE, 0, default_stream );
 		}
 
-		auto t2 = tmp_buffer.getData();
-
 		{
 			const void* args[] = { arg_cast( tmp_buffer.address() ), arg_cast( tmp_buffer.address() ), arg_cast( partial_sum.address() ), arg_cast( is_ready.address() ) };
 			OrochiUtils::launch1D( oroFunctions[Kernel::SCAN], SCAN_WG_SIZE * nWGsToExecute, args, SCAN_WG_SIZE, 0, default_stream );
 		}
-
-		auto t3 = tmp_buffer.getData();
 
 		{
 			const void* args[] = { arg_cast( src.address() ), arg_cast( dst.address() ), arg_cast( tmp_buffer.address() ), &n, &nItemsPerWI, &startBit, &nWGsToExecute };
@@ -169,9 +164,6 @@ class RadixSortSample : public Sample
 			sort1pass( *s, *d, n, i );
 			std::swap( s, d );
 		}
-
-		auto t1 = src.getData();
-		auto t2 = dst.getData();
 
 		if( s == &src )
 		{
@@ -204,6 +196,6 @@ int main()
 {
 	RadixSortSample sample;
 
-	const int testSize = 16 * 10;
+	const int testSize = 16 * 1000 * 1000;
 	sample.run( testSize );
 }
