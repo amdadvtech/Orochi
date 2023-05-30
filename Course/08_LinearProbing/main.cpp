@@ -7,7 +7,7 @@
 #include <Windows.h>
 #include <ppl.h>
 
-#include <0n_LinearProbing/LP.h>
+#include <08_LinearProbing/LP.h>
 
 // Reference
 // [0] Ordered hash tables ( original idea of BLP, very old )
@@ -1091,9 +1091,9 @@ public:
 	{
 		std::vector<const char*> opts = {
 			"-I../",
-			"-I../0n_LinearProbing/"
+			"-I../08_LinearProbing/"
 		};
-		oroFunction f = m_utils.getFunctionFromFile( m_device, "../0n_LinearProbing/Kernels.h", function, &opts );
+		oroFunction f = m_utils.getFunctionFromFile( m_device, "../08_LinearProbing/Kernels.h", function, &opts );
 		oroModuleLaunchKernel( f, gridDimX, 1, 1, blockDimX, 1, 1, 0, m_stream, std::vector<void*>( args ).data(), 0 );
 	}
 	oroStream getStream() { return m_stream; }
@@ -1105,24 +1105,24 @@ public:
 int main( int argc, char** argv )
 {
 	// Test
-	runTest<LP>();
-	runTest<BLP>();
-	runTest<BLPZeroEmpty>();
-	runTest<BLPZeroEmptyBranchless>();
-	runTest<RH>();
+	//runTest<LP>();
+	//runTest<BLP>();
+	//runTest<BLPZeroEmpty>();
+	//runTest<BLPZeroEmptyBranchless>();
+	//runTest<RH>();
 
-	 runConcurrentTest<LP_ConcurrentCPU>();
+	// runConcurrentTest<LP_ConcurrentCPU>();
 
-	{
-		runConcurrentPerfTest<LP_ConcurrentCPU>();
+	//{
+	//	runConcurrentPerfTest<LP_ConcurrentCPU>();
 
-		runPerfTest<LP>();
-		runPerfTest<LP_ConcurrentCPU>();
-		runPerfTest<RH>();
-		runPerfTest<BLP>();
-		runPerfTest<BLPZeroEmpty>();
-		runPerfTest<BLPZeroEmptyBranchless>();
-	}
+	//	runPerfTest<LP>();
+	//	runPerfTest<LP_ConcurrentCPU>();
+	//	runPerfTest<RH>();
+	//	runPerfTest<BLP>();
+	//	runPerfTest<BLPZeroEmpty>();
+	//	runPerfTest<BLPZeroEmptyBranchless>();
+	//}
 	LPSample sample;
 
 	int BlockSize = 32;

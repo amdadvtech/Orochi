@@ -76,5 +76,5 @@ workspace "Course"
    include "./05_WaterfallScheme"
    include "./06_PersistentThreads"
    include "./07_DynamicAllocation"
-   include "./0n_LinearProbing"
+   include "./08_LinearProbing"
    

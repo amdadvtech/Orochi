@@ -1,4 +1,4 @@
-project "0n_LinearProbing"
+project "08_LinearProbing"
       kind "ConsoleApp"
 
       targetdir "../bin/%{cfg.buildcfg}"
