@@ -1,7 +1,7 @@
 #include <common/Common.h>
 #include <LP.h>
 
-extern "C" __global__ void insert( LP_Concurrent<false> lp, int upper, int nItemsPerThread )
+extern "C" __global__ void insertLP( LP_Concurrent<false> lp, int upper, int nItemsPerThread )
 { 
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -24,7 +24,7 @@ extern "C" __global__ void insertBLP( BLP_ConcurrentGPU blp, int upper, int nIte
 	for( int i = 0; i < nItemsPerThread; i++ )
 	{
 		int x = rnd.next() % upper;
-		blp.find( x );
+		blp.insert( x );
 	}
 }
 
@@ -39,6 +39,7 @@ extern "C" __global__ void insertBLP( BLP_ConcurrentGPU blp, int upper, int nIte
 //	atomicExch( mutex, 0 );
 //}
 
+#if 0
 extern "C" __global__ void increment( u32* counter, u32* mutex )
 {
 	// workaround
@@ -60,3 +61,4 @@ extern "C" __global__ void increment( u32* counter, u32* mutex )
 	while( __all( done ) == false );
 	// while( __all_sync( 0xFFFFFFFF, done ) == false );
 }
+#endif

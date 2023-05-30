@@ -289,7 +289,6 @@ class LP_Concurrent
 		printf( "\n" );
 	}
 
-	// LP_Concurrent
 	void copyTo( LP_Concurrent<false>* other )
 	{
 		m_table.copyTo( &other->m_table );
@@ -375,89 +374,123 @@ class BLP_Concurrent
 	DEVICE
 	InsertionResult insert( u32 k )
 	{
-	retry:
-		u32 h = home( k );
-		u32 oldval = atomicCAS( &m_table[h], EMPTY, k | OCCUPIED_BIT );
-		if( oldval == EMPTY )
+		u32 done = 0;
+		InsertionResult r;
+#if !defined( __KERNELCC__ )
+		while( !done )
+#else
+		while( !__all( done ) )
+#endif
 		{
-			return INSERTED;
-		}
-		else if( oldval == ( k | OCCUPIED_BIT ) )
-		{
-			return FOUND;
-		}
-		else if( oldval == EMPTY_LOCKED )
-		{
-			goto retry;
-		}
+			if( done )
+			{
+				continue;
+			}
 
-		u32 hashK = hash( k );
-		if( find( k, hashK, h ) )
-		{
-			return FOUND;
-		}
+			u32 h = home( k );
+			u32 oldval = atomicCAS( &m_table[h], EMPTY, k | OCCUPIED_BIT );
+			if( oldval == EMPTY )
+			{
+				r = INSERTED;
+				done = 1;
+				continue;
+			}
+			else if( oldval == ( k | OCCUPIED_BIT ) )
+			{
+				r = FOUND;
+				done = 1;
+				continue;
+			}
+			else if( oldval == EMPTY_LOCKED )
+			{
+				continue;
+			}
 
-		u32 t_left = h - 1;
-		u32 t_right = h + 1;
+			u32 hashK = hash( k );
+			if( find( k, hashK, h ) )
+			{
+				r = FOUND;
+				done = 1;
+				continue;
+			}
 
-		while( t_left < m_table.size() && ( m_table[t_left] & OCCUPIED_BIT ) )
-		{
-			t_left--;
-		}
-		while( t_right < m_table.size() && ( m_table[t_right] & OCCUPIED_BIT ) )
-		{
-			t_right++;
-		}
+			u32 t_left = h - 1;
+			u32 t_right = h + 1;
 
-		if( m_table.size() <= t_left && m_table.size() <= t_right )
-		{
-			return OUT_OF_MEMORY;
-		}
+			while( t_left < m_table.size() && ( m_table[t_left] & OCCUPIED_BIT ) )
+			{
+				t_left--;
+			}
+			while( t_right < m_table.size() && ( m_table[t_right] & OCCUPIED_BIT ) )
+			{
+				t_right++;
+			}
 
-		// TryLock
-		if( tryLock( t_left ) == false )
-		{
-			goto retry;
-		}
-		if( tryLock( t_right ) == false )
-		{
-			unlock( t_left );
-			goto retry;
-		}
+			if( m_table.size() <= t_left && m_table.size() <= t_right )
+			{
+				r = OUT_OF_MEMORY;
+				done = 1;
+				continue;
+			}
 
-		// It is possible to got some changes during lock process. So check again.
-		if( find( k, hashK, h ) )
-		{
+			// TryLock
+			if( tryLock( t_left ) == false )
+			{
+				continue;
+			}
+			if( tryLock( t_right ) == false )
+			{
+				unlock( t_left );
+				continue;
+			}
+
+			// It is possible to got some changes during lock process. So check again.
+			if( find( k, hashK, h ) )
+			{
+				unlock( t_left );
+				unlock( t_right );
+				r = FOUND;
+				done = 1;
+				continue;
+			}
+#if defined( __KERNELCC__ )
+			__threadfence();
+#endif
+
+			int dir = hash( m_table[h] & VALUE_MASK ) < hashK ? +1 : -1;
+
+			// if t_left is not empty, you can't move toward left
+			if( m_table.size() <= t_left )
+			{
+				dir = -1;
+			}
+			// if t_right is not empty, you can't move toward right
+			if( m_table.size() <= t_right )
+			{
+				dir = +1;
+			}
+
+			u32 j = 0 < dir ? t_left : t_right;
+			while( j + dir < m_table.size() && ( m_table[j + dir] & OCCUPIED_BIT ) && ( (i64)hash( m_table[j + dir] & VALUE_MASK ) - (i64)hashK ) * dir < 0 )
+			{
+				m_table[j] = m_table[j + dir];
+				j += dir;
+			}
+
+			m_table[j] = k | OCCUPIED_BIT;
+
+#if defined( __KERNELCC__ )
+			__threadfence();
+#endif
+
 			unlock( t_left );
 			unlock( t_right );
-			return FOUND;
+
+			r = INSERTED;
+			done = 1;
+			continue;
 		}
-
-		int dir = hash( m_table[h] & VALUE_MASK ) < hashK ? +1 : -1;
-
-		// if t_left is not empty, you can't move toward left
-		if( m_table.size() <= t_left )
-		{
-			dir = -1;
-		}
-		// if t_right is not empty, you can't move toward right
-		if( m_table.size() <= t_right )
-		{
-			dir = +1;
-		}
-
-		u32 j = 0 < dir ? t_left : t_right;
-		while( j + dir < m_table.size() && ( m_table[j + dir] & OCCUPIED_BIT ) && ( (i64)hash( m_table[j + dir] & VALUE_MASK ) - (i64)hashK ) * dir < 0 )
-		{
-			m_table[j] = m_table[j + dir];
-			j += dir;
-		}
-
-		m_table[j] = k | OCCUPIED_BIT;
-		unlock( t_left );
-		unlock( t_right );
-
-		return INSERTED;
+		return r;
 	}
 
 	DEVICE
@@ -466,6 +499,20 @@ class BLP_Concurrent
 		u32 h = home( k );
 		u32 hashK = hash( k );
 		return find( k, hashK, h );
+	}
+
+	DEVICE
+	float getOccupancy() const
+	{
+		int nOccupied = 0;
+		for( int i = 0; i < m_table.size(); i++ )
+		{
+			if( m_table[i] & OCCUPIED_BIT )
+			{
+				nOccupied++;
+			}
+		}
+		return (float)nOccupied / m_table.size();
 	}
 #if !defined( __KERNELCC__ )
 	std::set<u32> set() const
@@ -510,6 +557,8 @@ class BLP_Concurrent
 		}
 		printf( "\n" );
 	}
+	void copyTo( BLP_Concurrent<false>* other ) { m_table.copyTo( &other->m_table ); }
+	void copyTo( BLP_Concurrent<true>* other ) { m_table.copyTo( &other->m_table ); }
 #endif
 	Buffer<u32, isCpu> m_table;
 };

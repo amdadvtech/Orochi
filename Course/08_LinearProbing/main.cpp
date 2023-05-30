@@ -1319,7 +1319,8 @@ public:
 	{
 		std::vector<const char*> opts = {
 			"-I../",
-			"-I../08_LinearProbing/"
+			"-I../08_LinearProbing/",
+			//"--gpu-architecture=compute_75"
 		};
 		oroFunction f = m_utils.getFunctionFromFile( m_device, "../08_LinearProbing/Kernels.h", function, &opts );
 		oroModuleLaunchKernel( f, gridDimX, 1, 1, blockDimX, 1, 1, 0, m_stream, std::vector<void*>( args ).data(), 0 );
@@ -1414,31 +1415,48 @@ int main( int argc, char** argv )
 	int BlockSize = 32;
 	int NBuckets = 100000000;
 	int Numbers = 1000000000;
+	//int NBuckets = 100;
+	//int Numbers = 1000;
 	double loadFactor = 0.75;
 
 	int nItemsPerThread = 512;
 	int nBlocks = div_round_up( NBuckets * loadFactor / nItemsPerThread, BlockSize );
 
-	for (int i = 0 ; i < 32 ; i++)
+	for (int i = 0 ; i < 4 ; i++)
 	{
 		LP_Concurrent<false> lpGpu( NBuckets );
 
 		OroStopwatch oroStream( sample.getStream() );
 		oroStream.start();
-		sample.launch1D( "insert", nBlocks, BlockSize, {
+		sample.launch1D( "insertLP", nBlocks, BlockSize, {
 			&lpGpu,
 			&Numbers,
 			&nItemsPerThread
 		} );
 		oroStream.stop();
 		float ms = oroStream.getMs();
-		printf( "%f \n", ms );
+		printf( "insertLP %f \n", ms );
 
 		LP_Concurrent<true> lpCpu;
 		lpGpu.copyTo( &lpCpu );
 		printf( "occupancy %f \n", lpCpu.getOccupancy() );
 	}
 
+	for( int i = 0; i < 4; i++ )
+	{
+		BLP_ConcurrentGPU blpGpu( NBuckets );
+
+		OroStopwatch oroStream( sample.getStream() );
+		oroStream.start();
+		sample.launch1D( "insertBLP", nBlocks, BlockSize, { &blpGpu, &Numbers, &nItemsPerThread } );
+		oroStream.stop();
+		float ms = oroStream.getMs();
+		printf( "insertBLP %f ms \n", ms );
+
+		BLP_Concurrent<true> lpCpu;
+		blpGpu.copyTo( &lpCpu );
+		printf( "occupancy %f \n", lpCpu.getOccupancy() );
+	}
 
 	// lock 
 	//{
