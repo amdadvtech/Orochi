@@ -113,7 +113,7 @@ extern "C" __device__ void WorkgroupSync( int threadId, int blockId, int current
 		*currentGlobalOffset = offset;
 	}
 
-	__threadfence();
+	__syncthreads();
 }
 
 extern "C" __global__ void ParallelExclusiveScan( int* gCount, int* gHistogram, volatile int* gPartialSum, volatile bool* gIsReady )
@@ -123,13 +123,13 @@ extern "C" __global__ void ParallelExclusiveScan( int* gCount, int* gHistogram, 
 
 	blockBuffer[threadIdx.x] = gCount[blockIdx.x * blockDim.x + threadIdx.x];
 
-	__threadfence();
+	__syncthreads();
 
 	// Do parallel exclusive scan on the LDS
 
 	int currentSegmentSum = ldsScanExclusive( blockBuffer, SCAN_WG_SIZE );
 
-	__threadfence();
+	__syncthreads();
 
 	// Sync all the Workgroups to calculate the global offset.
 
@@ -165,25 +165,25 @@ __device__ void localSort4bitMulti( int* keys, u32* ldsKeys, const int START_BIT
 		lds.m_unpacked[threadIdx.x][packIdx][idx] += 1;
 	}
 
-	__threadfence();
+	__syncthreads();
 
 	for( int ii = 0; ii < N_BINS_PACKED_4BIT; ++ii )
 	{
 		ldsTemp[threadIdx.x] = lds.m_packed[threadIdx.x][ii];
-		__threadfence();
+		__syncthreads();
 		const u64 sum = ldsScanExclusive( ldsTemp, EXEC_WIDTH );
-		__threadfence();
+		__syncthreads();
 		lds.m_packed[threadIdx.x][ii] = ldsTemp[threadIdx.x];
 
 		if( threadIdx.x == 0 ) lds.m_packed[EXEC_WIDTH][ii] = sum;
 	}
 
-	__threadfence();
+	__syncthreads();
 
 	auto* tmp = &lds.m_unpacked[EXEC_WIDTH][0][0];
 	ldsScanExclusive( tmp, N_BINS_PACKED_4BIT * N_BINS_PACK_FACTOR );
 
-	__threadfence();
+	__syncthreads();
 
 	for( int i = 0; i < N_ITEMS_PER_WI; ++i )
 	{
@@ -195,7 +195,7 @@ __device__ void localSort4bitMulti( int* keys, u32* ldsKeys, const int START_BIT
 
 		ldsKeys[offset + rank] = keys[i];
 	}
-	__threadfence();
+	__syncthreads();
 
 	for( int i = 0; i < N_ITEMS_PER_WI; ++i )
 	{
@@ -232,7 +232,7 @@ extern "C" __global__ void SortKernel( int* gSrcKey, int* gDstKey, int* gHistogr
 	{
 		localOffsets[i] = gHistogram[i * N_WGS_EXECUTED + blockIdx.x];
 	}
-	__threadfence();
+	__syncthreads();
 
 	for( int ii = 0; ii < gNItemsPerWI; ii += SORT_N_ITEMS_PER_WI )
 	{
@@ -241,7 +241,7 @@ extern "C" __global__ void SortKernel( int* gSrcKey, int* gDstKey, int* gHistogr
 			const int idx = offset + i * SORT_WG_SIZE + threadIdx.x;
 			ldsKeys[i * SORT_WG_SIZE + threadIdx.x] = ( idx < gN ) ? gSrcKey[idx] : 0xffffffff;
 		}
-		__threadfence();
+		__syncthreads();
 
 		for( int i = 0; i < SORT_N_ITEMS_PER_WI; ++i )
 		{
@@ -255,7 +255,7 @@ extern "C" __global__ void SortKernel( int* gSrcKey, int* gDstKey, int* gHistogr
 		{
 			lds.histogramU32[i] = 0;
 		}
-		__threadfence();
+		__syncthreads();
 
 		for( int i = 0; i < SORT_N_ITEMS_PER_WI; ++i )
 		{
@@ -271,7 +271,7 @@ extern "C" __global__ void SortKernel( int* gSrcKey, int* gDstKey, int* gHistogr
 		}
 		if( threadIdx.x == 0 ) lds.histogram[1][( ldsKeys[SORT_N_ITEMS_PER_WI * SORT_WG_SIZE - 1] >> START_BIT ) & RADIX_MASK] = SORT_N_ITEMS_PER_WI * SORT_WG_SIZE;
 
-		__threadfence();
+		__syncthreads();
 
 		const int upperBound = ( offset + threadIdx.x * SORT_N_ITEMS_PER_WI + SORT_N_ITEMS_PER_WI > gN ) ? ( gN - ( offset + threadIdx.x * SORT_N_ITEMS_PER_WI ) ) : SORT_N_ITEMS_PER_WI;
 		if( upperBound < 0 )
@@ -286,7 +286,7 @@ extern "C" __global__ void SortKernel( int* gSrcKey, int* gDstKey, int* gHistogr
 			gDstKey[dstIdx] = keys[i];
 		}
 
-		__threadfence();
+		__syncthreads();
 
 		for( int i = 0; i < N_BINS_PER_WI; i++ )
 		{
