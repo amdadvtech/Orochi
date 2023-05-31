@@ -147,14 +147,6 @@ inline u32 hash( u32 x )
 	return x;
 }
 
-DEVICE
-inline u32 unhash( u32 x )
-{
-	x ^= x >> 16;
-	x *= INV_INT_PHI;
-	return x;
-}
-
 #if !defined( __KERNELCC__ )
 inline u32 atomicCAS( u32* address, u32 compare, u32 val )
 {
