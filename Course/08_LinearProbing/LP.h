@@ -160,6 +160,10 @@ inline u32 atomicCAS( u32* address, u32 compare, u32 val )
 {
 	return InterlockedCompareExchange( address, val, compare );
 }
+inline void atomicExch( u32* address, u32 val ) 
+{ 
+	InterlockedExchange( address, val );
+}
 #endif
 
 template <bool isCpu>
@@ -366,7 +370,8 @@ class BLP_Concurrent
 	{
 		if( location < m_table.size() )
 		{
-			atomicCAS( &m_table[location], EMPTY_LOCKED, EMPTY );
+			// atomicCAS( &m_table[location], EMPTY_LOCKED, EMPTY );
+			atomicExch( &m_table[location], EMPTY );
 		}
 	}
 
@@ -479,9 +484,19 @@ class BLP_Concurrent
 
 			m_table[j] = k | OCCUPIED_BIT;
 
+			// Partially, it's unlocked but still protected
+			if( 0 < dir )
+			{
+				t_left = 0xFFFFFFFF;
+			}
+			else
+			{
+				t_right = 0xFFFFFFFF;
+			}
+
 #if defined( __KERNELCC__ )
 			__threadfence();
-#endif
+#endif 
 
 			unlock( t_left );
 			unlock( t_right );
