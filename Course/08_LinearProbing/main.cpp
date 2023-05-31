@@ -1414,20 +1414,38 @@ int main( int argc, char** argv )
 
 	int BlockSize = 32;
 	int NBuckets = 100000000;
-	int Numbers = 1000000000;
+	int upper = 1000000000;
 	double loadFactor = 0.90;
 
 	int nItemsPerThread = 512;
 	int nBlocks = div_round_up( NBuckets * loadFactor / nItemsPerThread, BlockSize );
 
+// takes some time
+//#define ENABLE_VARIDATION_GPU 1
+
+#if defined( ENABLE_VARIDATION_GPU )
+	std::set<uint32_t> referenceSet;
+	for( int tid = 0; tid < nBlocks * BlockSize; tid++ )
+	{
+		splitmix64 rnd;
+		rnd.x = tid;
+
+		for( int i = 0; i < nItemsPerThread; i++ )
+		{
+			int x = rnd.next() % upper;
+			referenceSet.insert( x );
+		}
+	}
+#endif
+
 	for (int i = 0 ; i < 4 ; i++)
 	{
-		LP_Concurrent<false> lpGpu( NBuckets );
+		LP_ConcurrentGPU lpGpu( NBuckets );
 
 		{
 			OroStopwatch oroStream( sample.getStream() );
 			oroStream.start();
-			sample.launch1D( "insertLP", nBlocks, BlockSize, { &lpGpu, &Numbers, &nItemsPerThread } );
+			sample.launch1D( "insertLP", nBlocks, BlockSize, { &lpGpu, &upper, &nItemsPerThread } );
 			oroStream.stop();
 			float ms = oroStream.getMs();
 			printf( "insertLP %f \n", ms );
@@ -1443,7 +1461,7 @@ int main( int argc, char** argv )
 			counter.fillZero();
 			OroStopwatch oroStream( sample.getStream() );
 			oroStream.start();
-			sample.launch1D( "findLP", nBlocks, BlockSize, { &lpGpu, &Numbers, &nItemsPerThread, counter.dataPtr() } );
+			sample.launch1D( "findLP", nBlocks, BlockSize, { &lpGpu, &upper, &nItemsPerThread, counter.dataPtr() } );
 			oroStream.stop();
 			float ms = oroStream.getMs();
 
@@ -1451,6 +1469,11 @@ int main( int argc, char** argv )
 			counter.copyTo( &counterValue );
 			printf( "findLP %f ms, counter = %d \n", ms, counterValue );
 		}
+#if defined( ENABLE_VARIDATION_GPU )
+		LP_ConcurrentCPU lpCpu( NBuckets );
+		lpGpu.copyTo( &lpCpu );
+		OROASSERT( referenceSet == lpCpu.set(), 0 );
+#endif
 	}
 
 	printf( "----\n" );
@@ -1462,7 +1485,7 @@ int main( int argc, char** argv )
 		{
 			OroStopwatch oroStream( sample.getStream() );
 			oroStream.start();
-			sample.launch1D( "insertBLP", nBlocks, BlockSize, { &blpGpu, &Numbers, &nItemsPerThread } );
+			sample.launch1D( "insertBLP", nBlocks, BlockSize, { &blpGpu, &upper, &nItemsPerThread } );
 			oroStream.stop();
 			float ms = oroStream.getMs();
 			printf( "insertBLP %f ms \n", ms );
@@ -1478,7 +1501,7 @@ int main( int argc, char** argv )
 			counter.fillZero();
 			OroStopwatch oroStream( sample.getStream() );
 			oroStream.start();
-			sample.launch1D( "findBLP", nBlocks, BlockSize, { &blpGpu, &Numbers, &nItemsPerThread, counter.dataPtr() } );
+			sample.launch1D( "findBLP", nBlocks, BlockSize, { &blpGpu, &upper, &nItemsPerThread, counter.dataPtr() } );
 			oroStream.stop();
 			float ms = oroStream.getMs();
 
@@ -1486,6 +1509,12 @@ int main( int argc, char** argv )
 			counter.copyTo( &counterValue );
 			printf( "findBLP %f ms, counter = %d \n", ms, counterValue );
 		}
+#if defined( ENABLE_VARIDATION_GPU )
+		BLP_ConcurrentCPU blpCpu( NBuckets );
+		blpGpu.copyTo( &blpCpu );
+		blpCpu.set();
+		OROASSERT( referenceSet == blpCpu.set(), 0 );
+#endif
 	}
 
 	// lock 

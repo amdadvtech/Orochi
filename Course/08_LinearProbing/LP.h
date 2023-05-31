@@ -572,8 +572,14 @@ class BLP_Concurrent
 		}
 		printf( "\n" );
 	}
-	void copyTo( BLP_Concurrent<false>* other ) { m_table.copyTo( &other->m_table ); }
-	void copyTo( BLP_Concurrent<true>* other ) { m_table.copyTo( &other->m_table ); }
+	void copyTo( BLP_Concurrent<false>* other )
+	{
+		m_table.copyTo( &other->m_table );
+	}
+	void copyTo( BLP_Concurrent<true> *other )
+	{
+		m_table.copyTo( &other->m_table );
+	}
 #endif
 	Buffer<u32, isCpu> m_table;
 };
