@@ -136,8 +136,7 @@ struct splitmix64
 	}
 };
 
-const int INT_PHI = 0x9e3779b9;
-const int INV_INT_PHI = 0x144cbc89;
+const u32 INT_PHI = 0x9e3779b9;
 
 DEVICE
 inline u32 hash( u32 x )
@@ -161,9 +160,9 @@ inline void atomicExch( u32* address, u32 val )
 template <bool isCpu>
 class LP_Concurrent
 {
-	enum
+	enum : u32
 	{
-		OCCUPIED_BIT = 1 << 31,
+		OCCUPIED_BIT = 1U << 31,
 		VALUE_MASK = ~OCCUPIED_BIT,
 	};
 
@@ -304,10 +303,10 @@ template<int isCpu>
 class BLP_Concurrent
 {
   public:
-	enum
+	enum : u32
 	{
-		OCCUPIED_BIT = 1 << 31,
-		LOCK_BIT = 1 << 30,
+		OCCUPIED_BIT = 1U << 31,
+		LOCK_BIT = 1U << 30,
 		VALUE_MASK = ~( OCCUPIED_BIT | LOCK_BIT ),
 		EMPTY = 0,
 		EMPTY_LOCKED = LOCK_BIT,
