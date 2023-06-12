@@ -370,14 +370,21 @@ class BLP_Concurrent
 	DEVICE
 	InsertionResult insert( u32 k )
 	{
+#if defined( CUDART_VERSION ) && CUDART_VERSION >= 9000
+		const u32 curActiveMask = __activemask();
+#endif
 		u32 done = 0;
 		InsertionResult r;
-#if !defined( __KERNELCC__ )
-		while( !done )
-#else
-		while( !__all( done ) )
-#endif
+		for(;;)
 		{
+#if !defined( __KERNELCC__ )
+			if( done ) { break; }
+#elif defined( CUDART_VERSION ) && CUDART_VERSION >= 9000
+			__syncwarp( curActiveMask );
+			if( __all_sync( curActiveMask, done ) ) { break; }
+#else
+			if( __all( done ) ) { break; }
+#endif
 			if( done )
 			{
 				continue;
