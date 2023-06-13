@@ -802,10 +802,23 @@ int main( int argc, char** argv )
 	}
 #endif
 
-	const double loadFactors[] = { 0.4, 0.5, 0.6, 0.7, 0.8, 0.9 };
+	const double loadFactors[] = { 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9 };
 	const int NLoadFactors = sizeof( loadFactors ) / sizeof( loadFactors[0] );
-	uint64_t itemsToIssue[NLoadFactors]; 
-
+#if 1
+	uint64_t itemsToIssue[NLoadFactors] =
+	{ 
+		10258472,
+		21073696,
+		32505788,
+		44630383,
+		57537883,
+		71337585,
+		86160429,
+		102168786,
+		119568562,
+	};
+#else
+	uint64_t itemsToIssue[NLoadFactors];
 	for( int i = 0; i < NLoadFactors; i++ )
 	{
 		LP lp( NBuckets );
@@ -828,6 +841,7 @@ int main( int argc, char** argv )
 		itemsToIssue[i] = nIterations;
 		printf( "loadFactor %f : nIterations %d\n", loadFactors[i], nIterations );
 	}
+#endif
 
 	for( int i = 0; i < NLoadFactors; i++ )
 	{
@@ -888,7 +902,7 @@ int main( int argc, char** argv )
 
 	printf( "----\n" );
 
-		for( int i = 0; i < NLoadFactors; i++ )
+	for( int i = 0; i < NLoadFactors; i++ )
 	{
 		int nItemsPerThread = 512;
 
