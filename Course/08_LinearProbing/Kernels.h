@@ -32,39 +32,78 @@ extern "C" __global__ void findLP( LP_Concurrent<false> lp, int upper, int nItem
 {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-	splitmix64 rnd;
-	rnd.x = tid ^ 0x12345;
-
-	int found = 0;
-	for( int i = 0; i < nItemsPerThread; i++ )
+	// the same sequence
 	{
-		int x = rnd.next() % upper;
-		if( lp.find( x ) )
+		splitmix64 rnd;
+		rnd.x = tid;
+
+		int found = 0;
+		for( int i = 0; i < nItemsPerThread; i++ )
 		{
-			found++;
+			int x = rnd.next() % upper;
+			if( lp.find( x ) )
+			{
+				found++;
+			}
 		}
+		atomicAdd( counter, found );
 	}
 
-	atomicAdd( counter, found );
+	// another random case
+	{
+		splitmix64 rnd;
+		rnd.x = tid ^ 0x12345;
+
+		int found = 0;
+		for( int i = 0; i < nItemsPerThread; i++ )
+		{
+			int x = rnd.next() % upper;
+			if( lp.find( x ) )
+			{
+				found++;
+			}
+		}
+		atomicAdd( counter, found );
+	}
 }
 
-extern "C" __global__ void findBLP( BLP_ConcurrentGPU blp, int upper, int nItemsPerThread, u32* counter )
+extern "C" __global__ void findBLP( BLP_ConcurrentGPU lp, int upper, int nItemsPerThread, u32* counter )
 {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-	splitmix64 rnd;
-	rnd.x = tid ^ 0x12345;
-
-	int found = 0;
-	for( int i = 0; i < nItemsPerThread; i++ )
+	// the same sequence
 	{
-		int x = rnd.next() % upper;
-		if( blp.find( x ) )
+		splitmix64 rnd;
+		rnd.x = tid;
+
+		int found = 0;
+		for( int i = 0; i < nItemsPerThread; i++ )
 		{
-			found++;
+			int x = rnd.next() % upper;
+			if( lp.find( x ) )
+			{
+				found++;
+			}
 		}
+		atomicAdd( counter, found );
 	}
-	atomicAdd( counter, found );
+
+	// another random case
+	{
+		splitmix64 rnd;
+		rnd.x = tid ^ 0x12345;
+
+		int found = 0;
+		for( int i = 0; i < nItemsPerThread; i++ )
+		{
+			int x = rnd.next() % upper;
+			if( lp.find( x ) )
+			{
+				found++;
+			}
+		}
+		atomicAdd( counter, found );
+	}
 }
 
 //extern "C" __global__ void increment( u32 * counter, u32* mutex )

@@ -782,7 +782,7 @@ int main( int argc, char** argv )
 
 	int BlockSize = 32;
 	int NBuckets = 100000000;
-	int upper    = 200000000;
+	int upper    = 1000000000;
 
 // takes some time
 //#define ENABLE_VARIDATION_GPU 1
@@ -807,15 +807,15 @@ int main( int argc, char** argv )
 #if 1
 	uint64_t itemsToIssue[NLoadFactors] =
 	{ 
-		10258472,
-		21073696,
-		32505788,
-		44630383,
-		57537883,
-		71337585,
-		86160429,
-		102168786,
-		119568562,
+		10050080,
+		20202421,
+		30459635,
+		40821942,
+		51293228,
+		61873878,
+		72569211,
+		83380440,
+		94310970,
 	};
 #else
 	uint64_t itemsToIssue[NLoadFactors];
@@ -897,7 +897,7 @@ int main( int argc, char** argv )
 			OROASSERT( referenceSet == lpCpu.set(), 0 );
 	#endif
 		}
-		printf( "LP LoadFactor[ %f ] insert - find = %f - %f \n", loadFactors[i], sumExecMSInsert / NRuns, sumExecMSFind / NRuns );
+		printf( "LP LoadFactor[ %f ] insert find = %f %f \n", loadFactors[i], sumExecMSInsert / NRuns, sumExecMSFind / NRuns );
 	}
 
 	printf( "----\n" );
@@ -950,7 +950,7 @@ int main( int argc, char** argv )
 			OROASSERT( referenceSet == lpCpu.set(), 0 );
 #endif
 		}
-		printf( "BLP LoadFactor[ %f ] insert - find = %f - %f \n", loadFactors[i], sumExecMSInsert / NRuns, sumExecMSFind / NRuns );
+		printf( "BLP LoadFactor[ %f ] insert find = %f %f \n", loadFactors[i], sumExecMSInsert / NRuns, sumExecMSFind / NRuns );
 	}
 
 //
