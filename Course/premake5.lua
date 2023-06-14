@@ -71,7 +71,7 @@ workspace "Course"
 
    include "./01_Reduction"
    include "./02_PrefixScan"
-   include "./03_WritingOutput"
+   include "./03_Enqueue"
    include "./04_BottomUpTraversal"
    include "./05_WaterfallScheme"
    include "./06_PersistentThreads"
