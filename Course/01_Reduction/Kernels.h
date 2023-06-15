@@ -7,7 +7,7 @@ __device__ T ReduceBlock( T val, volatile T* cache )
 	__syncthreads();
 	for( int i = 1; i < blockDim.x; i <<= 1 )
 	{
-		if( ( threadIdx.x & i ) == i )
+		if( threadIdx.x & i )
 			cache[threadIdx.x] += cache[threadIdx.x ^ i];
 		__syncthreads();
 	}

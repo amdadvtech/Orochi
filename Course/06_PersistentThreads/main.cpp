@@ -43,7 +43,7 @@ class PersistentThreadsSample : public Sample
 				OrochiUtils::waitForCompletion();
 				sw.start();
 
-				OrochiUtils::launch1D( func, threads, args, 32 );
+				OrochiUtils::launch1D( func, threads, args, BlockSize );
 				OrochiUtils::waitForCompletion();
 				sw.stop();
 

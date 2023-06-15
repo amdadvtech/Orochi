@@ -27,18 +27,33 @@ typedef unsigned char u8;
 
 typedef long long int i64;
 
+#ifndef __KERNELCC__
+#define __device__
+#endif
+
 struct alignas( 32 ) Node
 {
 	int m_left;
 	int m_right;
 	int m_parent;
 	int m_pivot;
+
+	__device__ bool isLeftLeaf() const { return m_left < 0; }
+	__device__ bool isRightLeaf() const { return m_right < 0; }
+
+	__device__ int getLeftIndex() const { return m_left < 0 ? ~m_left : m_left; }
+	__device__ int getRightIndex() const { return m_right < 0 ? ~m_right : m_right; }
+	__device__ int getParentIndex() const { return m_parent; }
+	__device__ int getPivot() const { return m_pivot; }
 };
 
 struct alignas( 8 ) Leaf
 {
 	int m_value;
 	int m_parent;
+
+	__device__ int getValue() const { return m_value; }
+	__device__ int getParentIndex() const { return m_parent; }
 };
 
 #ifndef __KERNELCC__
@@ -52,7 +67,7 @@ class Sample
 {
   public:
 	static constexpr int DeviceIndex = 0;
-	static constexpr int RunCount = 4;
+	static constexpr int RunCount = 8;
 	static constexpr int BlockSize = 1024;
 
 	Sample( const Sample& ) = delete;
