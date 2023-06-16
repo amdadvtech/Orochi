@@ -8,7 +8,9 @@ class ReductionSample : public Sample
 		std::default_random_engine generator;
 		std::uniform_int_distribution<int> distribution( 0, 16 );
 
+		// Input is an array of integers
 		Oro::GpuMemory<int> d_input( size );
+		// Output is a single interger
 		Oro::GpuMemory<int> d_output( 1 );
 
 		std::vector<int> h_input( size );
@@ -27,10 +29,12 @@ class ReductionSample : public Sample
 				for( u32 j = 0; j < size; ++j )
 				{
 					h_input[j] = distribution( generator );
+					// Compute the correct result on CPU
 					h_output += h_input[j];
 				}
 				d_input.copyFromHost( h_input.data(), size );
 
+				// Reset the global counter
 				OrochiUtils::memset( d_output.ptr(), 0, sizeof( int ) );
 				OrochiUtils::waitForCompletion();
 				sw.start();
@@ -39,6 +43,7 @@ class ReductionSample : public Sample
 				OrochiUtils::waitForCompletion();
 				sw.stop();
 
+				// Validate the GPU result
 				OROASSERT( h_output == d_output.getSingle(), 0 );
 
 				float time = sw.getMs();

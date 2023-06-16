@@ -8,9 +8,13 @@ class PrefixScanSample : public Sample
 		std::default_random_engine generator;
 		std::uniform_int_distribution<int> distribution( 0, 16 );
 
+		// Input is an array of integers
 		Oro::GpuMemory<int> d_input( size );
+		// Output is an array of integers (prefix scan)
 		Oro::GpuMemory<int> d_output( size );
+		// Block counter for device-wise prefix scan
 		Oro::GpuMemory<int> d_counter( 1 );
+		// Offset sum for device-wise prefix scan
 		Oro::GpuMemory<int> d_sum( 1 );
 
 		std::vector<int> h_input( size );
@@ -30,6 +34,7 @@ class PrefixScanSample : public Sample
 				for( u32 j = 0; j < size; ++j )
 				{
 					h_input[j] = distribution( generator );
+					// Compute the correct result on CPU
 					if( j == 0 )
 						h_output[j] = h_input[j];
 					else
@@ -37,6 +42,7 @@ class PrefixScanSample : public Sample
 				}
 				d_input.copyFromHost( h_input.data(), size );
 
+				// Reset the block counter and the offset sum
 				OrochiUtils::memset( d_counter.ptr(), 0, sizeof( int ) );
 				OrochiUtils::memset( d_sum.ptr(), 0, sizeof( int ) );
 				OrochiUtils::waitForCompletion();
@@ -46,6 +52,7 @@ class PrefixScanSample : public Sample
 				OrochiUtils::waitForCompletion();
 				sw.stop();
 
+				// Validate the GPU result against the CPU one
 				std::vector<int> output = d_output.getData();
 				for( u32 j = 0; j < size; ++j )
 					OROASSERT( h_output[j] == output[j], 0 );
