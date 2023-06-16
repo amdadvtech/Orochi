@@ -1,7 +1,7 @@
 #include <common/Common.h>
 #include <LP.h>
 
-extern "C" __global__ void insertLP( LP_Concurrent<false> lp, int upper, int nItemsPerThread )
+extern "C" __global__ void insertLP( LP_ConcurrentGPU lp, int upper, int nItemsPerThread )
 { 
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -28,7 +28,7 @@ extern "C" __global__ void insertBLP( BLP_ConcurrentGPU blp, int upper, int nIte
 	}
 }
 
-extern "C" __global__ void findLP( LP_Concurrent<false> lp, int upper, int nItemsPerThread, u32* counter )
+extern "C" __global__ void findLP( LP_ConcurrentGPU lp, int upper, int nItemsPerThread, u32* counter )
 {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
