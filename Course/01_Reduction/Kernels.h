@@ -23,7 +23,7 @@ __device__ T ReduceWarp( T val )
 {
 	for( int i = 1; i < warpSize; i <<= 1 )
 	{
-		// Fetch the corresponding element
+		// Read the register of the corresponding thread
 		T tmp = __shfl_xor( val, i );
 		// Add it to the current value
 		val += tmp;

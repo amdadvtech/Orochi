@@ -9,9 +9,13 @@ class BottomUpTraversalSample : public Sample
 		std::default_random_engine generator;
 		std::uniform_int_distribution<int> distribution( 0, 16 );
 
+		// Counters for internal nodes
 		Oro::GpuMemory<int> d_counters( size - 1 );
+		// Output array with sums for internal nodes
 		Oro::GpuMemory<int> d_sums( size - 1 );
+		// Input binary tree - internal nodes
 		Oro::GpuMemory<Node> d_nodes( size - 1 );
+		// Input binary tree - leaves
 		Oro::GpuMemory<Leaf> d_leaves( size );
 
 		std::vector<int> h_input( size );
@@ -32,12 +36,14 @@ class BottomUpTraversalSample : public Sample
 				for( u32 j = 0; j < size; ++j )
 				{
 					h_input[j] = distribution( generator );
+					// Summing up all elements on CPU
 					h_sum += h_input[j];
 				}
 				TreeBuilder().build( h_input, h_nodes, h_leaves );
 				d_nodes.copyFromHost( h_nodes.data(), size - 1 );
 				d_leaves.copyFromHost( h_leaves.data(), size );
 
+				// Reset counters
 				OrochiUtils::memset( d_counters.ptr(), 0, ( size - 1 ) * sizeof( int ) );
 				OrochiUtils::waitForCompletion();
 				sw.start();
@@ -46,6 +52,7 @@ class BottomUpTraversalSample : public Sample
 				OrochiUtils::waitForCompletion();
 				sw.stop();
 
+				// Validate the sum in the root
 				OROASSERT( h_sum == d_sums.getSingle(), 0 );
 
 				float time = sw.getMs();

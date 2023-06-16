@@ -8,8 +8,11 @@ class EnqueueSample : public Sample
 		std::default_random_engine generator;
 		std::uniform_int_distribution<int> distribution( 0, 16 );
 
+		// Input is an array of integers
 		Oro::GpuMemory<int> d_input( size );
+		// Output is an array of integers (input values satifying the predicate in arbitrary order)
 		Oro::GpuMemory<int> d_output( size );
+		// We need twp additional counter 
 		Oro::GpuMemory<int> d_counters( 2 );
 
 		std::vector<int> h_input( size );
@@ -29,10 +32,12 @@ class EnqueueSample : public Sample
 				{
 					h_input[j] = distribution( generator );
 					bool predicate = h_input[j] & 1;
+					// We just compute the number of elements satisfying the predicate
 					if( predicate ) ++h_counter;
 				}
 				d_input.copyFromHost( h_input.data(), size );
 
+				// Reset global counters
 				OrochiUtils::memset( d_counters.ptr(), 0, 2 * sizeof( int ) );
 				OrochiUtils::waitForCompletion();
 				sw.start();
@@ -41,6 +46,8 @@ class EnqueueSample : public Sample
 				OrochiUtils::waitForCompletion();
 				sw.stop();
 
+				// Validate the GPU result
+				// We just check the number of enqueued elements
 				OROASSERT( h_counter == d_counters.getSingle(), 0 );
 
 				float time = sw.getMs();

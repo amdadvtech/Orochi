@@ -55,6 +55,7 @@ __device__ T ScanBlockBlelloch( T val, volatile T* cache )
 		active <<= 1;
 		__syncthreads();  // Synchronize after each iteration
 	}
+	// Each thread returns the corresponding prefix scan value
 	return cache[threadIdx.x] + val;
 }
 
