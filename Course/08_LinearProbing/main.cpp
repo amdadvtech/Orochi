@@ -674,133 +674,29 @@ int main( int argc, char** argv )
 		printf( "BLP LoadFactor[ %f ] insert find = %f %f \n", loadFactors[i], sumExecMSInsert / NRuns, sumExecMSFind / NRuns );
 	}
 
-//
-//	for( int i = 0; i < 4; i++ )
-//	{
-//		BLP_ConcurrentGPU blpGpu( NBuckets );
-//
-//		{
-//			OroStopwatch oroStream( sample.getStream() );
-//			oroStream.start();
-//			sample.launch1D( "insertBLP", nBlocks, BlockSize, { &blpGpu, &upper, &nItemsPerThread } );
-//			oroStream.stop();
-//			float ms = oroStream.getMs();
-//			printf( "insertBLP %f ms \n", ms );
-//		}
-//
-//		//BLP_Concurrent<true> lpCpu;
-//		//blpGpu.copyTo( &lpCpu );
-//		//printf( "occupancy %f \n", lpCpu.getOccupancy() );
-//
-//		{
-//			BufferGPU<u32> counter;
-//			counter.resize( 1 );
-//			counter.fillZero();
-//			OroStopwatch oroStream( sample.getStream() );
-//			oroStream.start();
-//			sample.launch1D( "findBLP", nBlocks, BlockSize, { &blpGpu, &upper, &nItemsPerThread, counter.dataPtr() } );
-//			oroStream.stop();
-//			float ms = oroStream.getMs();
-//
-//			u32 counterValue;
-//			counter.copyTo( &counterValue );
-//			printf( "findBLP %f ms, counter = %d \n", ms, counterValue );
-//		}
-//#if defined( ENABLE_VARIDATION_GPU )
-//		BLP_ConcurrentCPU blpCpu( NBuckets );
-//		blpGpu.copyTo( &blpCpu );
-//		blpCpu.set();
-//		OROASSERT( referenceSet == blpCpu.set(), 0 );
-//#endif
-//	}
+	// spinlock example
+	{
+		BufferGPU<u32> counter;
+		BufferGPU<u32> mutex;
 
-	// lock 
-	//{
-	//	BufferGPU<u32> counter;
-	//	BufferGPU<u32> mutex;
+		counter.resize( 1 );
+		mutex.resize( 1 );
 
-	//	counter.resize( 1 );
-	//	mutex.resize( 1 );
+		counter.fillZero();
+		mutex.fillZero();
 
-	//	counter.fillZero();
-	//	mutex.fillZero();
+		sample.launch1D( "increment", 128, 32,
+						 {
+							 counter.dataPtr(),
+							 mutex.dataPtr(),
+						 } );
 
-	//	sample.launch1D( "increment", 128, 32,
-	//					 {
-	//						 counter.dataPtr(),
-	//						 mutex.dataPtr(),
-	//					 } );
+		OrochiUtils::waitForCompletion();
+		u32 n;
+		counter.copyTo( &n );
 
-	//	OrochiUtils::waitForCompletion();
-	//	u32 n;
-	//	counter.copyTo( &n );
+		printf( "n %d\n", n );
+	}
 
-	//	printf( "n %d\n", n );
-	//}
-
-	//LP_Concurrent<true> lpCpu;
-	//lpGpu.copyTo( &lpCpu );
-
-	//for (auto v : lpCpu.set())
-	//{
-	//	printf( "%d\n", v );
-	//}
-
-	//sample.getOroUtil()->getFunctionFromFile( sample.getOroUtil(), "../01_Reduction/Kernels.h", kernelName, &opts );
-	//const void* args[] = { &size, d_input.address(), d_output.address() };
-	//for( u32 i = 0; i < RunCount; ++i )
-	//{
-	//	int h_output = 0;
-	//	for( u32 j = 0; j < size; ++j )
-	//	{
-	//		h_input[j] = distribution( generator );
-	//		h_output += h_input[j];
-	//	}
-	//	d_input.copyFromHost( h_input.data(), size );
-
-	//	OrochiUtils::memset( d_output.ptr(), 0, sizeof( int ) );
-	//	OrochiUtils::waitForCompletion();
-	//	sw.start();
-
-	//	OrochiUtils::launch1D( func, size, args, BlockSize, BlockSize * sizeof( int ) );
-	//	OrochiUtils::waitForCompletion();
-	//	sw.stop();
-
-	//	OROASSERT( h_output == d_output.getSingle(), 0 );
-
-	//for(int i = 0 ; i < 10 ; i++)
-	//{
-	//	int NBuckets = 1000;
-	//	int Numbers = 10000;
-	//	double loadFactor = 0.75;
-
-	//	Stopwatch sw;
-	//	sw.start();
-
-	//	int nfound = 0;
-	//	splitmix64 rnd;
-	//	for( int i = 0; i < 100000; i++ )
-	//	{
-	//		BLPZeroEmptyBranchless lp( NBuckets );
-	//		for( int j = 0; j < NBuckets * loadFactor; j++ )
-	//		{
-	//			uint32_t v = rnd.next() % Numbers;
-	//			lp.insert( v );
-	//		}
-
-	//		for( int i = 0; i < NBuckets * loadFactor; i++ )
-	//		{
-	//			uint32_t v = rnd.next() % Numbers;
-	//			bool found = lp.find( v ) != -1;
-	//			if( found )
-	//			{
-	//				nfound++;
-	//			}
-	//		}
-	//	}
-
-	//	sw.stop();
-	//	printf( "%s %f ms, %d\n", typeid( BLPZeroEmptyBranchless ).name(), sw.getMs(), nfound );
-	//}
 	return EXIT_SUCCESS;
 }

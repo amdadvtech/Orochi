@@ -106,18 +106,22 @@ extern "C" __global__ void findBLP( BLP_ConcurrentGPU lp, int upper, int nItemsP
 	}
 }
 
-//extern "C" __global__ void increment( u32 * counter, u32* mutex )
-//{
-//	while( atomicCAS( mutex, 0, 1 ) != 0 )
-//		;
-//
-//	__threadfence();
-//	( *counter )++;
-//	__threadfence();
-//	atomicExch( mutex, 0 );
-//}
-
 #if 0
+// Dead lock example. Be careful if you execute without thread independent scheduling.
+extern "C" __global__ void increment( u32 * counter, u32* mutex )
+{
+	while( atomicCAS( mutex, 0, 1 ) != 0 )
+		;
+
+	__threadfence();
+	
+	( *counter )++;
+
+	__threadfence();
+	atomicExch( mutex, 0 );
+}
+#else
+// Exclusive lock example without dead locks.
 extern "C" __global__ void increment( u32* counter, u32* mutex )
 {
 	// workaround
@@ -135,8 +139,11 @@ extern "C" __global__ void increment( u32* counter, u32* mutex )
 
 			done = 1;
 		}
-	}
-	while( __all( done ) == false );
-	// while( __all_sync( 0xFFFFFFFF, done ) == false );
+#if defined( CUDART_VERSION ) && CUDART_VERSION >= 9000
+		__syncwarp();
+	} while( __all_sync( 0xFFFFFFFF, done ) == false );
+#else
+	} while( __all( done ) == false );
+#endif
 }
 #endif
