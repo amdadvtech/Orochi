@@ -32,7 +32,7 @@ extern "C" __global__ void findLP( LP_Concurrent<false> lp, int upper, int nItem
 {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-	// the same sequence
+	// Find the same sequence
 	{
 		splitmix64 rnd;
 		rnd.x = tid;
@@ -49,7 +49,7 @@ extern "C" __global__ void findLP( LP_Concurrent<false> lp, int upper, int nItem
 		atomicAdd( counter, found );
 	}
 
-	// another random case
+	// Find another random case
 	{
 		splitmix64 rnd;
 		rnd.x = tid ^ 0x12345;
@@ -71,7 +71,7 @@ extern "C" __global__ void findBLP( BLP_ConcurrentGPU lp, int upper, int nItemsP
 {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-	// the same sequence
+	// Find the same sequence
 	{
 		splitmix64 rnd;
 		rnd.x = tid;
@@ -88,7 +88,7 @@ extern "C" __global__ void findBLP( BLP_ConcurrentGPU lp, int upper, int nItemsP
 		atomicAdd( counter, found );
 	}
 
-	// another random case
+	// Find another random case
 	{
 		splitmix64 rnd;
 		rnd.x = tid ^ 0x12345;

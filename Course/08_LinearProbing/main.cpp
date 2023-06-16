@@ -123,6 +123,7 @@ class StdSet_Concurrent
   public:
 	StdSet_Concurrent( int n = 0 ){
 	}
+	
 	void insert( u32 k )
 	{
 		std::lock_guard lock( m_mu );
@@ -161,20 +162,25 @@ class BLP
 		uint32_t v = hash( k );
 		return (uint64_t)v * m_table.size() / ( (uint64_t)UINT_MAX + 1 );
 	}
-
+	enum InsertionResult
+	{
+		INSERTED,
+		FOUND,
+		OUT_OF_MEMORY
+	};
 	// k must be less than equal 0x7FFFFFFF
-	int insert( uint32_t k )
+	InsertionResult insert( uint32_t k )
 	{
 		uint32_t h = home( k );
 		if( ( m_table[h] & OCCUPIED_BIT ) == 0 )
 		{
 			m_table[h] = k | OCCUPIED_BIT;
-			return h;
+			return INSERTED;
 		}
 
 		if( m_table[h] == ( k | OCCUPIED_BIT ) )
 		{
-			return h;
+			return FOUND;
 		}
 
 		uint32_t hashK = hash( k );
@@ -195,7 +201,7 @@ class BLP
 					}
 					if( ( m_table[j] & VALUE_MASK ) == k )
 					{
-						return j;
+						return FOUND;
 					}
 					j = h;
 				}
@@ -243,7 +249,7 @@ class BLP
 					}
 					if( ( m_table[j] & VALUE_MASK ) == k )
 					{
-						return j;
+						return FOUND;
 					}
 					j = h;
 				}
@@ -282,9 +288,9 @@ class BLP
 			}
 
 			m_table[j] = k | OCCUPIED_BIT;
-			return j;
+			return INSERTED;
 		}
-		return -1;
+		return OUT_OF_MEMORY;
 	}
 	bool find( uint32_t k ) const
 	{
@@ -384,8 +390,10 @@ void runTest( )
 		for( int j = 0; j < NBuckets * 0.75; j++ )
 		{
 			uint32_t v = rnd.next() % Numbers;
-			s.insert( v );
-			lp.insert( v );
+			bool inserted = s.insert( v ).second;
+			auto result = lp.insert( v );
+
+			OROASSERT( result == ( inserted ? T::INSERTED : T::FOUND ), 0 );
 		}
 		OROASSERT( s == lp.set(), 0 );
 
@@ -394,10 +402,11 @@ void runTest( )
 			uint32_t v = rnd.next() % Numbers;
 			bool found0 = s.count( v ) != 0;
 			bool found1 = lp.find( v );
+
 			OROASSERT( found0 == found1, 0 );
 		}
 	}
-	printf( "test / %s OK\n", typeid( T ).name() );
+	printf( "Sequential Test: %s OK\n", typeid( T ).name() );
 }
 
 template <class T>
@@ -437,7 +446,7 @@ void runConcurrentTest( )
 			OROASSERT( storage.find( v ) == truth.find( v ), 0 );
 		}
 	}
-	printf( "test con / %s OK\n", typeid( T ).name() );
+	printf( "Concurrent Test: %s OK\n", typeid( T ).name() );
 }
 
 inline int div_round_up( int val, int divisor ) 
@@ -472,7 +481,8 @@ public:
 
 int main( int argc, char** argv )
 {
-	printf( "--- Test ---\n" );
+	printf( "--- Test on the CPU ---\n" );
+	// Test the correctness of Linear Probing and Bidirectional Linear Probing
 	runTest<LP>();
 	runTest<BLP>();
 	runTest<LP_ConcurrentCPU>();
@@ -480,13 +490,15 @@ int main( int argc, char** argv )
 	runConcurrentTest<LP_ConcurrentCPU>();
 	runConcurrentTest<BLP_ConcurrentCPU>();
 
+
+	printf( "--- Test on the GPU ---\n" );
 	LPSample sample;
 
 	int BlockSize = 32;
 	int NBuckets = 100000000;
 	int upper    = 1000000000;
 
-// takes some time
+// GPU varidation code. It takes long time.
 //#define ENABLE_VARIDATION_GPU 1
 
 #if defined( ENABLE_VARIDATION_GPU )
@@ -504,6 +516,7 @@ int main( int argc, char** argv )
 	}
 #endif
 
+	// load factor list for the benchmark 
 	const double loadFactors[] = { 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9 };
 	const int NLoadFactors = sizeof( loadFactors ) / sizeof( loadFactors[0] );
 #if 1
@@ -545,6 +558,9 @@ int main( int argc, char** argv )
 	}
 #endif
 
+	// Linear Probing execution
+	// 1. "insertLP" kernel - insert random numbers
+	// 2. "findLP" kernel - find inserted numbers and find random numbers
 	for( int i = 0; i < NLoadFactors; i++ )
 	{
 		int nItemsPerThread = 512;
@@ -604,6 +620,9 @@ int main( int argc, char** argv )
 
 	printf( "----\n" );
 
+	// Bidirectional Linear Probing execution
+	// 1. "insertBLP" kernel - insert random numbers
+	// 2. "findBLP" kernel - find inserted numbers and find random numbers
 	for( int i = 0; i < NLoadFactors; i++ )
 	{
 		int nItemsPerThread = 512;
