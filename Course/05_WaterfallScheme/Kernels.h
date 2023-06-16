@@ -17,23 +17,23 @@ extern "C" __global__ void ConvertToBFSKernel( u32 size, const Node* inNodes, co
 			Node node = inNodes[nodeIndex];
 
 			u32 internalCount = 0;
-			if( node.m_left >= 0 ) ++internalCount;
-			if( node.m_right >= 0 ) ++internalCount;
+			if( !node.isLeftLeaf() ) ++internalCount;
+			if( !node.isRightLeaf() ) ++internalCount;
 			
 			int childOffset = atomicAdd( &counters[0], internalCount );
 			
-			if( node.m_left >= 0 )
+			if( !node.isLeftLeaf() )
 			{
 				int childIndex = childOffset++;
-				taskQueue[childIndex] = node.m_left; 
-				node.m_left = childIndex;
+				taskQueue[childIndex] = node.m_leftIndex; 
+				node.setLeftIndex( childIndex );
 			}
 
-			if( node.m_right >= 0 )
+			if( !node.isRightLeaf() )
 			{
 				int childIndex = childOffset;
-				taskQueue[childIndex] = node.m_right;
-				node.m_right = childIndex;
+				taskQueue[childIndex] = node.m_rightIndex;
+				node.setRightIndex( childIndex );
 			}
 
 			outNodes[index] = node;
@@ -41,6 +41,6 @@ extern "C" __global__ void ConvertToBFSKernel( u32 size, const Node* inNodes, co
 			atomicAdd( &counters[1], 2 - internalCount );
 			done = true;
 		}
-		if( !__any( !done ) ) break;
+		if( __all( done ) ) break;
 	}
 }

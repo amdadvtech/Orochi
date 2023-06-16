@@ -33,28 +33,28 @@ typedef long long int i64;
 
 struct alignas( 32 ) Node
 {
-	int m_left;
-	int m_right;
-	int m_parent;
+	int m_leftIndex;
+	int m_rightIndex;
+	int m_parentAddr;
 	int m_pivot;
 
-	__device__ bool isLeftLeaf() const { return m_left < 0; }
-	__device__ bool isRightLeaf() const { return m_right < 0; }
+	__device__ bool isLeftLeaf() const { return m_leftIndex < 0; }
+	__device__ bool isRightLeaf() const { return m_rightIndex < 0; }
 
-	__device__ int getLeftIndex() const { return m_left < 0 ? ~m_left : m_left; }
-	__device__ int getRightIndex() const { return m_right < 0 ? ~m_right : m_right; }
-	__device__ int getParentIndex() const { return m_parent; }
-	__device__ int getPivot() const { return m_pivot; }
+	__device__ int getLeftAddr() const { return m_leftIndex < 0 ? ~m_leftIndex : m_leftIndex; }
+	__device__ int getRightAddr() const { return m_rightIndex < 0 ? ~m_rightIndex : m_rightIndex; }
+
+	__device__ void setLeftIndex( int leftIndex ) { m_leftIndex = leftIndex; }
+	__device__ void setRightIndex( int rightIndex ) { m_rightIndex = rightIndex; }
 };
 
 struct alignas( 8 ) Leaf
 {
 	int m_value;
-	int m_parent;
-
-	__device__ int getValue() const { return m_value; }
-	__device__ int getParentIndex() const { return m_parent; }
+	int m_parentAddr;
 };
+
+__device__ static bool isLeaf( int nodeIndex ) { return nodeIndex < 0; }
 
 #ifndef __KERNELCC__
 #define CHECK_ORO( error ) ( checkOro( error, __FILE__, __LINE__ ) )
@@ -67,7 +67,7 @@ class Sample
 {
   public:
 	static constexpr int DeviceIndex = 0;
-	static constexpr int RunCount = 8;
+	static constexpr int RunCount = 4;
 	static constexpr int BlockSize = 1024;
 
 	Sample( const Sample& ) = delete;
@@ -114,34 +114,34 @@ class TreeBuilder
 			stack.pop();
 
 			Node& node = nodes[nodeIndex];
-			int l = node.m_left;
-			int r = node.m_right;
+			int l = node.m_leftIndex;
+			int r = node.m_rightIndex;
 			int m = ( l + r ) / 2;
 			node.m_pivot = input[m];
 
 			if( m - l > 1 )
 			{
 				int childIndex = nodeCount++;
-				node.m_left = childIndex;
+				node.m_leftIndex = childIndex;
 				nodes[childIndex] = { l, m, nodeIndex };
 				stack.push( childIndex );
 			}
 			else
 			{
-				node.m_left = ~l;
+				node.m_leftIndex = ~l;
 				leaves[l] = { input[l], nodeIndex };
 			}
 
 			if( r - m > 1 )
 			{
 				int childIndex = nodeCount++;
-				node.m_right = childIndex;
+				node.m_rightIndex = childIndex;
 				nodes[childIndex] = { m, r, nodeIndex };
 				stack.push( childIndex );
 			}
 			else
 			{
-				node.m_right = ~m;
+				node.m_rightIndex = ~m;
 				leaves[m] = { input[m], nodeIndex };
 			}
 		}

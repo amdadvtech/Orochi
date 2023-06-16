@@ -6,7 +6,7 @@ extern "C" __global__ void BottomUpTraversalKernel( u32 size, const Node* nodes,
 	if( index >= size ) return;
 
 	const Leaf& leaf = leaves[index];
-	index = leaf.getParentIndex();
+	index = leaf.m_parentAddr;
 
 	while( index >= 0 && atomicAdd( &counters[index], 1 ) > 0 )
 	{
@@ -16,16 +16,16 @@ extern "C" __global__ void BottomUpTraversalKernel( u32 size, const Node* nodes,
 
 		int sum = 0;
 		if( node.isLeftLeaf() ) 
-			sum += leaves[node.getLeftIndex()].getValue();
+			sum += leaves[node.getLeftAddr()].m_value;
 		else
-			sum += sums[node.getLeftIndex()];
+			sum += sums[node.getLeftAddr()];
 
 		if( node.isRightLeaf() ) 
-			sum += leaves[node.getRightIndex()].getValue();
+			sum += leaves[node.getRightAddr()].m_value;
 		else
-			sum += sums[node.getRightIndex()];
+			sum += sums[node.getRightAddr()];
 
 		sums[index] = sum;
-		index = node.getParentIndex();
+		index = node.m_parentAddr;
 	}
 }

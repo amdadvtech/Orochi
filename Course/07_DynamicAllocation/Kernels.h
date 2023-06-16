@@ -63,11 +63,11 @@ extern "C" __global__ void CountKernel( u32 size, u32 stackSize, u32 stackCount,
 	while( !stack.empty() )
 	{
 		int nodeIndex = stack.pop();
-		if( nodeIndex >= 0 )
+		if( !isLeaf( nodeIndex ) )
 		{
 			const Node& node = nodes[nodeIndex];
-			if( node.m_pivot <= query ) stack.push( node.m_right );
-			if( node.m_pivot >= query ) stack.push( node.m_left );
+			if( node.m_pivot <= query ) stack.push( node.m_rightIndex );
+			if( node.m_pivot >= query ) stack.push( node.m_leftIndex );
 		}
 		else
 		{

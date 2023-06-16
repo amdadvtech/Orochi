@@ -9,7 +9,7 @@ One would require [premake](https://premake.github.io/) and [Visual Studio](http
 
 The following instruction is an example of how to generate Visual Studio solution.
 
-`premake5.exe vs2022`
+`../tools/premake5/win/premake5.exe vs2022`
 
 This instruction also copies the dll files needed to run HIP programs.
 
