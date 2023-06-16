@@ -12,12 +12,9 @@
 // Reference
 // [0] Ordered hash tables ( original idea of BLP, very old )
 // [1] A Concurrent Bidirectional Linear Probing Algorithm
-// [2] A Parallel Compact Hash Table ( after [1] )
 
-// very nice code example:
+// Other resource
 // https://github.com/senderista/hashtable-benchmarks
-
-
 
 class LP
 {
@@ -148,145 +145,6 @@ class StdSet_Concurrent
 	// int m_table[1];
 };
 
-class RH
-{
-  public:
-	enum
-	{
-		OCCUPIED_BIT = 1 << 31,
-		VALUE_MASK = ~OCCUPIED_BIT,
-	};
-
-	RH( int n ) : m_table( n ) {}
-
-	uint32_t home( uint32_t h ) const { return (uint64_t)h * m_table.size() / ( (uint64_t)UINT_MAX + 1 ); }
-
-	// probe sequence lengths
-	uint32_t psl( int i, uint32_t h )
-	{
-		/*
-		PSL =
-		 2  3  4     1
-		[ ][ ][ ][h][ ]
-		*/
-		int homeLocation = (int)home( h );
-
-		if( i < homeLocation )
-		{
-			// e.g. h 3 - 5 = -2
-			homeLocation = homeLocation - (int)m_table.size();
-		}
-
-		return i - homeLocation;
-	}
-
-	// k must be less than equal 0x7FFFFFFF
-	int insert( uint32_t k )
-	{
-		uint32_t h = home( hash( k ) );
-		int PSL = 0;
-		for( int i = 0; i < m_table.size(); i++ )
-		{
-			int location = ( h + i ) % m_table.size();
-
-			if( ( m_table[location] & OCCUPIED_BIT ) == 0 )
-			{
-				m_table[location] = k | OCCUPIED_BIT;
-				return location;
-			}
-			else if( ( m_table[location] & VALUE_MASK ) == k )
-			{
-				return location;
-			}
-			int thePSL = psl( location, hash( m_table[location] & VALUE_MASK ) );
-			if( thePSL < PSL )
-			{
-				uint32_t theValue = m_table[location] & VALUE_MASK;
-				m_table[location] = k | OCCUPIED_BIT;
-
-				PSL = thePSL;
-				k = theValue;
-			}
-			PSL++;
-		}
-		return -1;
-	}
-	bool find( uint32_t k ) const
-	{
-		uint32_t h = home( hash( k ) );
-		for( int i = 0; i < m_table.size(); i++ )
-		{
-			int location = ( h + i ) % m_table.size();
-			if( ( m_table[location] & OCCUPIED_BIT ) == 0 )
-			{
-				return false;
-			}
-			else if( m_table[location] == ( k | OCCUPIED_BIT ) )
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-	std::set<uint32_t> set() const
-	{
-		std::set<uint32_t> s;
-		for( auto value : m_table )
-		{
-			if( value & OCCUPIED_BIT )
-			{
-				s.insert( value & VALUE_MASK );
-			}
-		}
-		return s;
-	}
-
-	void print()
-	{
-		printf( "data=" );
-		for( int i = 0; i < m_table.size(); i++ )
-		{
-			if( m_table[i] & OCCUPIED_BIT )
-			{
-				printf( "%03d, ", m_table[i] & VALUE_MASK );
-			}
-			else
-			{
-				printf( "---, " );
-			}
-		}
-		printf( "\n" );
-
-		printf( "home=" );
-		for( int i = 0; i < m_table.size(); i++ )
-		{
-			if( m_table[i] & OCCUPIED_BIT )
-			{
-				printf( "%03d, ", home( m_table[i] & VALUE_MASK ) );
-			}
-			else
-			{
-				printf( "---, " );
-			}
-		}
-		printf( "\n" );
-
-		printf( "PSL =" );
-		for( int i = 0; i < m_table.size(); i++ )
-		{
-			if( m_table[i] & OCCUPIED_BIT )
-			{
-				printf( "%03d, ", psl( i, hash( m_table[i] & VALUE_MASK ) ) );
-			}
-			else
-			{
-				printf( "---, " );
-			}
-		}
-		printf( "\n" );
-	}
-	std::vector<uint32_t> m_table;
-};
 class BLP
 {
   public:
@@ -542,54 +400,6 @@ void runTest( )
 	printf( "test / %s OK\n", typeid( T ).name() );
 }
 
-template<class T>
-void runPerfTest( )
-{
-	int NBuckets = 100000;
-	int Numbers = 1000000;
-	double loadFactor = 0.75;
-
-	float timeInsert = 0;
-	float timeFind = 0;
-
-	int nfound = 0;
-	splitmix64 rnd;
-	for( int i = 0; i < 1000; i++ )
-	{
-		T lp( NBuckets );
-
-		Stopwatch sw;
-		sw.start();
-
-		for( int j = 0; j < NBuckets * loadFactor; j++ )
-		{
-			uint32_t v = rnd.next() % Numbers;
-			lp.insert( v );
-		}
-
-		sw.split();
-
-		for( int i = 0; i < NBuckets; i++ )
-		{
-			uint32_t v = rnd.next() % Numbers;
-			bool found = lp.find( v );
-			if( found )
-			{
-				nfound++;
-			}
-		}
-
-		sw.stop();
-
-		float times[2];
-		sw.getMs( times, 2 );
-		timeInsert += times[0];
-		timeFind += times[1];
-	}
-
-	printf( "%s insert %f ms, find %f ms %d\n", typeid( T ).name(), timeInsert, timeFind, nfound );
-}
-
 template <class T>
 void runConcurrentTest( )
 { 
@@ -629,48 +439,6 @@ void runConcurrentTest( )
 	}
 	printf( "test con / %s OK\n", typeid( T ).name() );
 }
-template <class T>
-void runConcurrentPerfTest()
-{ 
-	int NThreads = 32;
-	int NBuckets = 100000;
-	int Numbers = 10000000;
-	double loadFactor = 0.75;
-
-
-	int nfound = 0;
-
-	float timeInsertion = 0;
-	float timeFind = 0;
-
-	Stopwatch sw;
-	sw.start();
-	
-	int a = 0;
-
-	for (int k = 0; k < 512; k++)
-	{
-		T storage( NBuckets );
-		for( int i = 0; i < NThreads; i++ )
-		{
-			int nItemPerThread = NBuckets * loadFactor / NThreads;
-			concurrency::parallel_for( 0, NThreads, [k, nItemPerThread, Numbers, &storage](int index) 
-			{
-				splitmix64 rnd;
-				rnd.x = k * 100000 + index;
-				for( int j = 0; j < nItemPerThread; j++ )
-				{
-					uint32_t v = rnd.next() % Numbers;
-					storage.insert( v );
-				}
-			} );
-		}
-		a += storage.m_table[0];
-	}
-	sw.stop();
-
-	printf( "con / %s insertion %f ms %d\n", typeid( T ).name(), sw.getMs(), a );
-}
 
 inline int div_round_up( int val, int divisor ) 
 {
@@ -692,7 +460,6 @@ public:
 		std::vector<const char*> opts = {
 			"-I../",
 			"-I../08_LinearProbing/",
-			//"--gpu-architecture=compute_75"
 		};
 		oroFunction f = m_utils.getFunctionFromFile( m_device, "../08_LinearProbing/Kernels.h", function, &opts );
 		oroModuleLaunchKernel( f, gridDimX, 1, 1, blockDimX, 1, 1, 0, m_stream, std::vector<void*>( args ).data(), 0 );
@@ -705,78 +472,13 @@ public:
 
 int main( int argc, char** argv )
 {
-	// 6
-	//{
-	//	BLP_Concurrent blp( 10 );
-	//	blp.insert( 56 );
-	//	blp.print();
-	//	blp.insert( 48 );
-	//	blp.print();
-	//	blp.insert( 69 );
-	//	blp.print();
-
-	//	printf( "" );
-	//}
-
-	//{
-	//	int NBuckets = 1000;
-	//	int Numbers = 10000;
-	//	splitmix64 rnd;
-
-	//	for( int i = 0; i < 10000; i++ )
-	//	{
-	//		BLP blp( NBuckets );
-	//		BLP_Concurrent blpc( NBuckets );
-	//		for( int j = 0; j < NBuckets * 1.75; j++ )
-	//		{
-	//			uint32_t v = rnd.next() % Numbers;
-	//			blp.insert( v );
-	//			blpc.insert( v );
-	//		}
-
-	//		for (int i = 0; i < NBuckets; i++)
-	//		{
-	//			OROASSERT( blp.m_table[i] == blpc.m_table[i], 0 );
-	//		}
-	//	}
-	//}
-
-	//runTest<BLP_Concurrent>();
-	//runConcurrentPerfTest<LP_ConcurrentCPU>();
-	//runConcurrentPerfTest<BLP_Concurrent>();
-
-	//runPerfTest<LP_ConcurrentCPU>();
-	//runPerfTest<BLP_Concurrent>();
-	//blp.insert( 69 ); // 6 on the left side
-	//blp.print();
-	//blp.insert( 158 );
-	//blp.insert( 90 );
-	//blp.insert( 35 );
-	//blp.insert( 179 );
-	// blp.print();
-	// 
-
 	printf( "--- Test ---\n" );
 	runTest<LP>();
 	runTest<BLP>();
-	runTest<RH>();
 	runTest<LP_ConcurrentCPU>();
 	runTest<BLP_ConcurrentCPU>();
-
 	runConcurrentTest<LP_ConcurrentCPU>();
 	runConcurrentTest<BLP_ConcurrentCPU>();
-
-	printf( "--- perf ---\n" );
-	{
-		runConcurrentPerfTest<LP_ConcurrentCPU>();
-		runConcurrentPerfTest<BLP_ConcurrentCPU>();
-
-		runPerfTest<LP>();
-		runPerfTest<LP_ConcurrentCPU>();
-		runPerfTest<BLP_ConcurrentCPU>();
-		runPerfTest<RH>();
-		runPerfTest<BLP>();
-	}
 
 	LPSample sample;
 
