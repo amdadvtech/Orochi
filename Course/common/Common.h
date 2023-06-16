@@ -55,6 +55,7 @@ struct alignas( 8 ) Leaf
 };
 
 __device__ static bool isLeaf( int nodeIndex ) { return nodeIndex < 0; }
+__device__ static int getNodeAddr( int nodeIndex ) { return nodeIndex < 0 ? ~nodeIndex : nodeIndex; }
 
 #ifndef __KERNELCC__
 #define CHECK_ORO( error ) ( checkOro( error, __FILE__, __LINE__ ) )

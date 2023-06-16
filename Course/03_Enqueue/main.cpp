@@ -5,28 +5,41 @@ class EnqueueSample : public Sample
   public:
 	void run( u32 size ) 
 	{ 
+		// At least two items
+		assert( size > 1 );
+
+		// Random number generator
 		std::default_random_engine generator;
 		std::uniform_int_distribution<int> distribution( 0, 16 );
 
-		// Input is an array of integers
+		// Device input buffer
 		Oro::GpuMemory<int> d_input( size );
-		// Output is an array of integers (input values satifying the predicate in arbitrary order)
+		// Device output buffer
 		Oro::GpuMemory<int> d_output( size );
-		// We need twp additional counter 
+		// Device counters
 		Oro::GpuMemory<int> d_counters( 2 );
 
+		// Host input buffer
 		std::vector<int> h_input( size );
 		
+		// Compiler options
 		std::vector<const char*> opts;
 		opts.push_back( "-I../" );
 
 		Stopwatch sw;
 		auto test = [&]( const char* kernelName )
 		{
+			// Compile function from the source code caching the compiled module
+			// Sometimes it is necesarry to clear the cache (Course/build/cache)
 			oroFunction func = m_utils.getFunctionFromFile( m_device, "../03_Enqueue/Kernels.h", kernelName, &opts );
+
+			// Kernel arguments
 			const void* args[] = { &size, d_input.address(), d_output.address(), d_counters.address() };
+
+			// Run the kernel multiple times
 			for( u32 i = 0; i < RunCount; ++i )
 			{
+				// Generate input values
 				int h_counter = 0;
 				for( u32 j = 0; j < size; ++j )
 				{
@@ -35,21 +48,28 @@ class EnqueueSample : public Sample
 					// We just compute the number of elements satisfying the predicate
 					if( predicate ) ++h_counter;
 				}
+				// Copy the input data to GPU
 				d_input.copyFromHost( h_input.data(), size );
 
 				// Reset global counters
 				OrochiUtils::memset( d_counters.ptr(), 0, 2 * sizeof( int ) );
+
+				// Synchronize before measuring
 				OrochiUtils::waitForCompletion();
 				sw.start();
 
+				// Launch the kernel
 				OrochiUtils::launch1D( func, size, args, BlockSize );
+
+				// Synchronize and stop measuring the executing time
 				OrochiUtils::waitForCompletion();
 				sw.stop();
 
-				// Validate the GPU result
+				// Validate the result
 				// We just check the number of enqueued elements
 				OROASSERT( h_counter == d_counters.getSingle(), 0 );
 
+				// Print the statistics
 				float time = sw.getMs();
 				float speed = static_cast<float>( size ) / 1000.0f / 1000.0f / time;
 				float items = size / 1000.0f / 1000.0f;
