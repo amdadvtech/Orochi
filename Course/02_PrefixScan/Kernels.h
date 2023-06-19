@@ -98,6 +98,8 @@ __device__ T ScanDevice( T val, volatile T* cache, T* sum, int* counter )
 			;
 		// Add the block sum to obtain the block offset
 		offset = atomicAdd( sum, val );
+		// Use memory fence to ensure the order of atomics
+		__threadfence();
 		// Signalize the next block that can be processed
 		atomicAdd( counter, 1 );
 	}
