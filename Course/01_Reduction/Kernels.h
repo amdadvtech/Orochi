@@ -9,12 +9,10 @@ __device__ T ReduceBlock( T val, volatile T* cache )
 	__syncthreads(); 
 	for( int i = 1; i < blockDim.x; i <<= 1 )
 	{
-		if( threadIdx.x & i )
-			cache[threadIdx.x] += cache[threadIdx.x ^ i];
+		cache[threadIdx.x] += cache[threadIdx.x ^ i];
 		__syncthreads(); // Make sure that the data has been updated
 	}
-	// Return the last entry in the cache as a result
-	return cache[blockDim.x - 1];
+	return cache[threadIdx.x];
 }
 
 // Warp-wise reduction (addtion operator) using the shuffle instruction
@@ -23,13 +21,10 @@ __device__ T ReduceWarp( T val )
 {
 	for( int i = 1; i < warpSize; i <<= 1 )
 	{
-		// Read the register of the corresponding thread
-		T tmp = __shfl_xor( val, i );
-		// Add it to the current value
-		val += tmp;
+		// Read the register of the corresponding thread and add it to the current value
+		val += __shfl_xor( val, i );
 	}
-	// Return value of the last thread in the warp
-	return __shfl( val, warpSize - 1 );
+	return val;
 }
 
 extern "C" __global__ void ReduceBlockKernel( u32 size, const int* input, int* output )
