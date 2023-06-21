@@ -43,9 +43,6 @@ struct alignas( 32 ) Node
 
 	__device__ int getLeftAddr() const { return m_leftIndex < 0 ? ~m_leftIndex : m_leftIndex; }
 	__device__ int getRightAddr() const { return m_rightIndex < 0 ? ~m_rightIndex : m_rightIndex; }
-
-	__device__ void setLeftIndex( int leftIndex ) { m_leftIndex = leftIndex; }
-	__device__ void setRightIndex( int rightIndex ) { m_rightIndex = rightIndex; }
 };
 
 struct alignas( 8 ) Leaf
