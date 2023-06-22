@@ -14,8 +14,6 @@ class Stack
 		
 		// Lane index
 		u32 laneIndex = threadIdx.x & ( warpSize - 1 );
-		// First active lane in the warp
-		u32 firstLaneIndex = __ffsll( __ballot( true ) ) - 1;
 		
 		// The number of active warps
 		u32 activeWarps = stackCount / warpSize;
@@ -30,7 +28,7 @@ class Stack
 		while( warpHash == 0xffffffff )
 		{
 			// The first active lane tries to lock the buffer for the whole warp
-			if( laneIndex == firstLaneIndex )
+			if( laneIndex == 0 )
 			{
 				// If it is successful, set the hash to the candidate value
 				if( atomicCAS( &locks[warpHashCandidate], 0, 1 ) == 0 ) warpHash = warpHashCandidate;
@@ -38,7 +36,7 @@ class Stack
 			// Try the next position
 			warpHashCandidate = ( warpHashCandidate + 1 ) % activeWarps;
 			// Exchange the hash withint the warp
-			warpHash = __shfl( warpHash, firstLaneIndex );
+			warpHash = __shfl( warpHash, 0 );
 		}
 
 		// Save the acquired lock
@@ -59,10 +57,8 @@ class Stack
 	{
 		// Lane index
 		u32 laneIndex = threadIdx.x & ( warpSize - 1 );
-		// First active lane in the warp
-		u32 firstLaneIndex = __ffsll( __ballot( true ) ) - 1;
 		// Let the first lane release the lock
-		if( laneIndex == firstLaneIndex ) atomicExch( m_lock, 0 );
+		if( laneIndex == 0 ) atomicExch( m_lock, 0 );
 	}
 
 	// Pop method
