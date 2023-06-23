@@ -37,38 +37,45 @@ extern "C" __global__ void EnqueueNaiveKernel( u32 size, const int* input, int* 
 
 	// Predicate indicating the prefix scan input (binary)
 	// Indicating whether we enqueue the input value or not
-	bool predicate = val & 1;
+	bool enqueue = val & 1;
 	// We use just atomic add to get the offset
 	// Not efficient as it is called per thread
-	if( index < size && predicate ) output[atomicAdd( counter, 1 )] = val;
+	if( index < size && enqueue ) output[atomicAdd( counter, 1 )] = val;
 }
 
 // Enqueue kernel using the warp-wise prefix scan
 extern "C" __global__ void EnqueueKernel( u32 size, const int* input, int* output, int* counter )
 {
-	u32 index = threadIdx.x + blockDim.x * blockIdx.x;
+	u32 index0 = threadIdx.x + blockDim.x * blockIdx.x;
+	u32 index1 = index0 + gridDim.x * blockDim.x;
 	u32 laneIndex = threadIdx.x & ( warpSize - 1 );
 
-	int val = 0;
-	if( index < size ) val = input[index];
+	int val0 = 0;
+	int val1 = 0;
+	if( index0 < size ) val0 = input[index0];
+	if( index1 < size ) val1 = input[index1];
 
-	// Predicate indicating the prefix scan input (binary)
+	// Predicate indicating the prefix scan input
 	// Indicating whether we enqueue the input value or not
-	bool predicate = val & 1;
+	bool enqueue0 = val0 & 1;
+	bool enqueue1 = val1 & 1;
+	u32 enqueuedCount = enqueue0 + enqueue1;
 
 	// Warp-wise prefix scan
-	// We subtract the predicate value to get the exclusive prefix scan
-	int warpScan = ScanWarp( predicate ? 1 : 0 ) - predicate;
+	// We subtract the enqueue value to get the exclusive prefix scan
+	int warpScan = ScanWarp( enqueuedCount ) - enqueuedCount;
 
 	// The last thread in the warp atomically adds it value to the global counter to get the offset
 	// The value of the last thread is equal to the sum of all elements in the warp
 	int warpOffset = 0;
-	if( laneIndex == warpSize - 1 ) warpOffset = atomicAdd( counter, warpScan + predicate );
+	if( laneIndex == warpSize - 1 ) warpOffset = atomicAdd( counter, warpScan + enqueuedCount );
 
 	// We exchange the offset of the warp using the shuffle instruction
 	warpOffset = __shfl( warpOffset, warpSize - 1 );
 
-	if( index < size && predicate ) output[warpOffset + warpScan] = val;
+	u32 offset = warpOffset + warpScan;
+	if( index0 < size && enqueue0 ) output[offset++] = val0;
+	if( index1 < size && enqueue1 ) output[offset] = val1;
 }
 
 // Enqueue kernel using the binary warp-wise prefix scan
@@ -82,20 +89,20 @@ extern "C" __global__ void EnqueueBinaryKernel( u32 size, const int* input, int*
 
 	// Predicate indicating the prefix scan input (binary)
 	// Indicating whether we enqueue the input value or not
-	bool predicate = val & 1;
+	bool enqueue = val & 1;
 
 	// Binary warp-wise prefix scan
-	int warpScan = ScanWarpBinary( predicate );
+	int warpScan = ScanWarpBinary( enqueue );
 
 	// The last thread in the warp atomically adds it value to the global counter to get the offset
 	// The value of the last thread is equal to the sum of all elements in the warp
 	int warpOffset = 0;
-	if( laneIndex == warpSize - 1 ) warpOffset = atomicAdd( counter, warpScan + predicate );
+	if( laneIndex == warpSize - 1 ) warpOffset = atomicAdd( counter, warpScan + enqueue );
 
 	// We exchange the offset of the warp using the shuffle instruction
 	warpOffset = __shfl( warpOffset, warpSize - 1 );
 
-	if( index < size && predicate ) output[warpOffset + warpScan] = val;
+	if( index < size && enqueue ) output[warpOffset + warpScan] = val;
 }
 
 // Enqueue kernel using the binary warp-wise prefix scan exploiting the complementary propert of prefix scan
@@ -111,10 +118,10 @@ extern "C" __global__ void EnqueueComplementKernel( u32 size, const int* input, 
 
 	// Predicate indicating the prefix scan input (binary)
 	// Indicating whether we enqueue the input value or not
-	bool predicate = val & 1;
+	bool enqueue = val & 1;
 
 	// Binary warp-wise prefix scan
-	int warpScan = ScanWarpBinary( predicate );
+	int warpScan = ScanWarpBinary( enqueue );
 
 	// Complemental prefix scan with (k=1)
 	int complWarpScan = laneIndex - warpScan;
@@ -122,20 +129,20 @@ extern "C" __global__ void EnqueueComplementKernel( u32 size, const int* input, 
 	// The last thread in the warp atomically adds it value to the global counter to get the offset
 	// The value of the last thread is equal to the sum of all elements in the warp
 	int warpOffset = 0;
-	if( laneIndex == warpSize - 1 ) warpOffset = atomicAdd( &counters[0], warpScan + predicate );
+	if( laneIndex == warpSize - 1 ) warpOffset = atomicAdd( &counters[0], warpScan + enqueue );
 
 	// We exchange the offset of the warp using the shuffle instruction
 	warpOffset = __shfl( warpOffset, warpSize - 1 );
 
 	// Unfortunately, we have to use the second atomic add for the complement
 	int complWarpOffset = 0;
-	if( laneIndex == warpSize - 1 ) complWarpOffset = atomicAdd( &counters[1], complWarpScan + !predicate );
+	if( laneIndex == warpSize - 1 ) complWarpOffset = atomicAdd( &counters[1], complWarpScan + !enqueue );
 
 	// Again, we exchange the offset for the complement
 	complWarpOffset = __shfl( complWarpOffset, warpSize - 1 );
 
 	// Elements satifying the predicate are enqueued from the front
-	if( index < size && predicate )
+	if( index < size && enqueue )
 		output[warpOffset + warpScan] = val;
 	// Elements not satifying the predicate are enqueued from the back
 	else

@@ -27,7 +27,7 @@ class EnqueueSample : public Sample
 		opts.push_back( "-I../" );
 
 		Stopwatch sw;
-		auto test = [&]( const char* kernelName )
+		auto test = [&]( const char* kernelName, u32 threadCount )
 		{
 			// Compile function from the source code caching the compiled module
 			// Sometimes it is necesarry to clear the cache (Course/build/cache)
@@ -44,9 +44,9 @@ class EnqueueSample : public Sample
 				for( u32 j = 0; j < size; ++j )
 				{
 					h_input[j] = distribution( generator );
-					bool predicate = h_input[j] & 1;
+					bool enqueue = h_input[j] & 1;
 					// We just compute the number of elements satisfying the predicate
-					if( predicate ) ++h_counter;
+					if( enqueue ) ++h_counter;
 				}
 				// Copy the input data to GPU
 				d_input.copyFromHost( h_input.data(), size );
@@ -77,10 +77,10 @@ class EnqueueSample : public Sample
 			}
 		};
 
-		test( "EnqueueNaiveKernel" );
-		test( "EnqueueKernel" );
-		test( "EnqueueBinaryKernel" );
-		test( "EnqueueComplementKernel" );
+		test( "EnqueueNaiveKernel", size );
+		test( "EnqueueKernel", size / 2 );
+		test( "EnqueueBinaryKernel", size );
+		test( "EnqueueComplementKernel", size );
 	}
 };
 
