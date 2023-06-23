@@ -2,17 +2,17 @@
 
 // Block wise reduction (addtion operator) using the shared memory
 template<typename T>
-__device__ T ReduceBlock( T val, volatile T* cache )
+__device__ T ReduceBlock( T val, volatile T* smem )
 {
-	cache[threadIdx.x] = val;
+	smem[threadIdx.x] = val;
 	// Make sure that the data has been written to the shared memory
 	__syncthreads(); 
 	for( int i = 1; i < blockDim.x; i <<= 1 )
 	{
-		cache[threadIdx.x] += cache[threadIdx.x ^ i];
+		smem[threadIdx.x] += smem[threadIdx.x ^ i];
 		__syncthreads(); // Make sure that the data has been updated
 	}
-	return cache[threadIdx.x];
+	return smem[threadIdx.x];
 }
 
 // Warp-wise reduction (addtion operator) using the shuffle instruction
@@ -35,9 +35,9 @@ extern "C" __global__ void ReduceBlockKernel( u32 size, const int* input, int* o
 	if( index < size ) val = input[index];
 
 	// Shared memory cache
-	extern __shared__ int cache[];
+	extern __shared__ int smem[];
 	// Block-wise reduction
-	val = ReduceBlock( val, cache );
+	val = ReduceBlock( val, smem );
 	// Atomically add the block sum to the global counter
 	if( threadIdx.x == 0 ) atomicAdd( output, val );
 }

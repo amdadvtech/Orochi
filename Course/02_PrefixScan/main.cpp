@@ -84,8 +84,8 @@ class PrefixScanSample : public Sample
 			}
 		};
 
-		test( "ScanDeviceBlellochKernel" );
-		test( "ScanDeviceHillisSteeleKernel" );
+		test( "ScanDevice_BlellochKernel" );
+		test( "ScanDevice_HillisSteeleKernel" );
 	}
 };
 
