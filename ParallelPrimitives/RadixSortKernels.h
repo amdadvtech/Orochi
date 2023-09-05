@@ -16,7 +16,7 @@ using u64 = unsigned long long;
 
 __device__ constexpr u32 getMaskedBits( const u32 value, const u32 shift ) noexcept { return ( value >> shift ) & RADIX_MASK; }
 
-extern "C" __global__ void CountKernel( int* gSrc, int* gDst, int gN, int gNItemsPerWG, const int START_BIT, const int N_WGS_EXECUTED )
+extern "C" __global__ void CountKernel( int* gSrc, int* gDst, int* tmpCount, int gN, int gNItemsPerWG, const int START_BIT, const int N_WGS_EXECUTED )
 {
 	__shared__ int table[BIN_SIZE];
 
@@ -42,6 +42,11 @@ extern "C" __global__ void CountKernel( int* gSrc, int* gDst, int gN, int gNItem
 	for( int i = threadIdx.x; i < BIN_SIZE; i += COUNT_WG_SIZE )
 	{
 		gDst[i * N_WGS_EXECUTED + blockIdx.x] = table[i];
+	}
+
+	const auto countStartOffset = BIN_SIZE * blockIdx.x;
+	for (int i = threadIdx.x; i < BIN_SIZE; i += COUNT_WG_SIZE) {
+		tmpCount[countStartOffset + i] = table[i];
 	}
 }
 
@@ -616,7 +621,7 @@ extern "C" __global__ void ParallelExclusiveScanAllWG( int* gCount, int* gHistog
 }
 
 template<bool KEY_VALUE_PAIR>
-__device__ void SortImpl( int* gSrcKey, int* gSrcVal, int* gDstKey, int* gDstVal, int* gHistogram, int numberOfInputs, int gNItemsPerWG, const int START_BIT, const int N_WGS_EXECUTED )
+__device__ void SortImpl( int* gSrcKey, int* gSrcVal, int* gDstKey, int* gDstVal, int* gHistogram, int* tmpCount, int numberOfInputs, int gNItemsPerWG, const int START_BIT, const int N_WGS_EXECUTED )
 {
 	__shared__ u32 globalOffset[BIN_SIZE];
 	__shared__ u32 localPrefixSum[BIN_SIZE];
@@ -636,7 +641,11 @@ __device__ void SortImpl( int* gSrcKey, int* gSrcVal, int* gDstKey, int* gDstVal
 		globalOffset[i] = gHistogram[i * N_WGS_EXECUTED + blockIdx.x];
 
 		counters[i] = 0;
-		localPrefixSum[i] = 0;
+	}
+
+	for (int i = threadIdx.x; i < BIN_SIZE; i += SORT_WG_SIZE) 
+	{
+		localPrefixSum[i] = tmpCount[BIN_SIZE * blockIdx.x + i];
 	}
 
 	for( int w = 0; w < SORT_NUM_WARPS_PER_BLOCK; ++w )
@@ -649,17 +658,6 @@ __device__ void SortImpl( int* gSrcKey, int* gSrcVal, int* gDstKey, int* gDstVal
 
 	__syncthreads();
 
-	for( int i = threadIdx.x; i < upperBound; i += SORT_WG_SIZE )
-	{
-		const u32 itemIndex = blockIdx.x * gNItemsPerWG + i;
-
-		const auto item = gSrcKey[itemIndex];
-		const u32 bucketIndex = getMaskedBits( item, START_BIT );
-		atomicInc( &localPrefixSum[bucketIndex], 0xFFFFFFFF );
-	}
-
-	__syncthreads();
-
 	// Compute Prefix Sum
 
 	ldsScanExclusive( localPrefixSum, BIN_SIZE );
@@ -668,6 +666,7 @@ __device__ void SortImpl( int* gSrcKey, int* gSrcVal, int* gDstKey, int* gDstVal
 
 	// Reorder
 
+	#pragma unroll
 	for( int i = threadIdx.x; i < upperBound; i += SORT_WG_SIZE )
 	{
 		const u32 itemIndex = blockIdx.x * gNItemsPerWG + i;
@@ -733,12 +732,12 @@ __device__ void SortImpl( int* gSrcKey, int* gSrcVal, int* gDstKey, int* gDstVal
 	}
 }
 
-extern "C" __global__ void SortKernel( int* gSrcKey, int* gDstKey, int* gHistogram, int gN, int gNItemsPerWG, const int START_BIT, const int N_WGS_EXECUTED )
+extern "C" __global__ void SortKernel( int* gSrcKey, int* gDstKey, int* gHistogram, int* tmpCount, int gN, int gNItemsPerWG, const int START_BIT, const int N_WGS_EXECUTED )
 {
-	SortImpl<false>( gSrcKey, nullptr, gDstKey, nullptr, gHistogram, gN, gNItemsPerWG, START_BIT, N_WGS_EXECUTED );
+	SortImpl<false>( gSrcKey, nullptr, gDstKey, nullptr, gHistogram, tmpCount, gN, gNItemsPerWG, START_BIT, N_WGS_EXECUTED );
 }
 
-extern "C" __global__ void SortKVKernel( int* gSrcKey, int* gSrcVal, int* gDstKey, int* gDstVal, int* gHistogram, int gN, int gNItemsPerWG, const int START_BIT, const int N_WGS_EXECUTED )
+extern "C" __global__ void SortKVKernel( int* gSrcKey, int* gSrcVal, int* gDstKey, int* gDstVal, int* gHistogram, int* tmpCount, int gN, int gNItemsPerWG, const int START_BIT, const int N_WGS_EXECUTED )
 {
-	SortImpl<true>( gSrcKey, gSrcVal, gDstKey, gDstVal, gHistogram, gN, gNItemsPerWG, START_BIT, N_WGS_EXECUTED );
+	SortImpl<true>( gSrcKey, gSrcVal, gDstKey, gDstVal, gHistogram, tmpCount, gN, gNItemsPerWG, START_BIT, N_WGS_EXECUTED );
 }

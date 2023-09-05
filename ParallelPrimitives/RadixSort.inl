@@ -83,7 +83,7 @@ void RadixSort::sort1pass( const T src, const T dst, int n, int startBit, int en
 		const auto num_total_thread_for_count = m_num_threads_per_block_for_count * m_num_blocks_for_count;
 
 		const auto func{ oroFunctions[Kernel::COUNT] };
-		const void* args[] = { &srcKey, arg_cast( m_tmp_buffer.address() ), &n, &nItemPerWG, &startBit, &m_num_blocks_for_count };
+		const void* args[] = { &srcKey, arg_cast( m_tmp_buffer.address() ),arg_cast(m_tmp_count.address()), &n, &nItemPerWG, &startBit, &m_num_blocks_for_count };
 		OrochiUtils::launch1D( func, num_total_thread_for_count, args, m_num_threads_per_block_for_count, 0, stream );
 	};
 
@@ -131,12 +131,12 @@ void RadixSort::sort1pass( const T src, const T dst, int n, int startBit, int en
 
 		if constexpr( enable_key_value_pair_sorting )
 		{
-			const void* args[] = { &srcKey, &srcVal, &dstKey, &dstVal, arg_cast( m_tmp_buffer.address() ), &n, &num_items_per_block, &startBit, &num_blocks_for_sort };
+			const void* args[] = { &srcKey, &srcVal, &dstKey, &dstVal, arg_cast( m_tmp_buffer.address() ), arg_cast(m_tmp_count.address()), &n, &num_items_per_block, &startBit, &num_blocks_for_sort };
 			OrochiUtils::launch1D( oroFunctions[Kernel::SORT_KV], num_total_thread_for_sort, args, m_num_threads_per_block_for_sort, 0, stream );
 		}
 		else
 		{
-			const void* args[] = { &srcKey, &dstKey, arg_cast( m_tmp_buffer.address() ), &n, &num_items_per_block, &startBit, &num_blocks_for_sort };
+			const void* args[] = { &srcKey, &dstKey, arg_cast( m_tmp_buffer.address() ), arg_cast(m_tmp_count.address()), &n, &num_items_per_block, &startBit, &num_blocks_for_sort };
 			OrochiUtils::launch1D( oroFunctions[Kernel::SORT], num_total_thread_for_sort, args, m_num_threads_per_block_for_sort, 0, stream );
 		}
 	};

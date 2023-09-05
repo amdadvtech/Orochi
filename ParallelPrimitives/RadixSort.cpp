@@ -226,6 +226,7 @@ void RadixSort::configure( const std::string& kernelPath, const std::string& inc
 	m_num_blocks_for_scan = tmp_buffer_size / m_num_threads_per_block_for_scan;
 
 	m_tmp_buffer.resize( tmp_buffer_size );
+	m_tmp_count.resize(tmp_buffer_size);
 
 	if( selectedScanAlgo == ScanAlgo::SCAN_GPU_PARALLEL )
 	{

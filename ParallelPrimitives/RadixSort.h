@@ -111,6 +111,8 @@ class RadixSort final
 	// This buffer holds the "bucket" table from all GPU blocks.
 	GpuMemory<int> m_tmp_buffer;
 
+	GpuMemory<int> m_tmp_count;
+
 	int m_num_threads_per_block_for_count{};
 	int m_num_threads_per_block_for_scan{};
 	int m_num_threads_per_block_for_sort{};
