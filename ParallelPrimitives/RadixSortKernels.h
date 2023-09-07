@@ -618,6 +618,156 @@ extern "C" __global__ void ParallelExclusiveScanAllWG( int* gCount, int* gHistog
 template<bool KEY_VALUE_PAIR>
 __device__ void SortImpl( int* gSrcKey, int* gSrcVal, int* gDstKey, int* gDstVal, int* gHistogram, int numberOfInputs, int gNItemsPerWG, const int START_BIT, const int N_WGS_EXECUTED )
 {
+#if defined( __CUDACC__ )
+	constexpr int SORT_SUBBLOCK_SIZE = 2048;
+#else
+	constexpr int SORT_SUBBLOCK_SIZE = 4096;
+#endif
+
+	const int startOffset = blockIdx.x * gNItemsPerWG;
+	const int nItemInBlock = ( startOffset + gNItemsPerWG > numberOfInputs ) ? numberOfInputs - startOffset : gNItemsPerWG;
+
+	struct ElementLocation
+	{
+		u32 localSrcIndex : 12;
+		u32 localOffset : 12;
+		u32 bucket : 8;
+	};
+
+	__shared__ u32 globalOffset[BIN_SIZE];
+	__shared__ u32 localPrefixSum[BIN_SIZE];
+	__shared__ u32 counters[BIN_SIZE];
+	__shared__ u32 matchMasks[SORT_NUM_WARPS_PER_BLOCK][BIN_SIZE];
+	__shared__ u8 elementBuckets[SORT_SUBBLOCK_SIZE];
+	__shared__ ElementLocation elementLocations[SORT_SUBBLOCK_SIZE];
+
+	for( int i = threadIdx.x; i < BIN_SIZE; i += SORT_WG_SIZE )
+	{
+		// Note: The size of gHistogram is always BIN_SIZE * N_WGS_EXECUTED
+		globalOffset[i] = gHistogram[i * N_WGS_EXECUTED + blockIdx.x];
+	}
+
+	for( int w = 0; w < SORT_NUM_WARPS_PER_BLOCK; ++w )
+	{
+		for( int i = threadIdx.x; i < BIN_SIZE; i += SORT_WG_SIZE )
+		{
+			matchMasks[w][i] = 0;
+		}
+	}
+
+	for( int j = 0; j < nItemInBlock; j += SORT_SUBBLOCK_SIZE )
+	{
+		for( int i = threadIdx.x; i < BIN_SIZE; i += SORT_WG_SIZE )
+		{
+			counters[i] = 0;
+			localPrefixSum[i] = 0;
+		}
+		__syncthreads();
+
+		for( int i = 0; i < SORT_SUBBLOCK_SIZE; i += SORT_WG_SIZE )
+		{
+			int itemIndex = blockIdx.x * gNItemsPerWG + j + i + threadIdx.x;
+			if( itemIndex < numberOfInputs )
+			{
+				const auto item = gSrcKey[itemIndex];
+				const u32 bucketIndex = getMaskedBits( item, START_BIT );
+				atomicInc( &localPrefixSum[bucketIndex], 0xFFFFFFFF );
+				elementBuckets[i + threadIdx.x] = (u8)bucketIndex;
+			}
+		}
+
+		__syncthreads();
+
+		ldsScanExclusive( localPrefixSum, BIN_SIZE );
+
+		__syncthreads();
+
+		for( int i = 0; i < SORT_SUBBLOCK_SIZE; i += SORT_WG_SIZE )
+		{
+			int itemIndex = blockIdx.x * gNItemsPerWG + j + i + threadIdx.x;
+			u32 bucketIndex = elementBuckets[i + threadIdx.x];
+
+			const int warp = threadIdx.x / 32;
+			const int lane = threadIdx.x % 32;
+
+			__syncthreads();
+
+			if( itemIndex < numberOfInputs )
+			{
+				atomicOr( &matchMasks[warp][bucketIndex], 1u << lane );
+			}
+
+			__syncthreads();
+
+			bool flushMask = false;
+
+			if( itemIndex < numberOfInputs )
+			{
+				const u32 matchMask = matchMasks[warp][bucketIndex];
+				const u32 lowerMask = ( 1u << lane ) - 1;
+				u32 offset = __popc( matchMask & lowerMask );
+
+				flushMask = ( offset == 0 );
+
+				for( int w = 0; w < warp; ++w )
+				{
+					offset += __popc( matchMasks[w][bucketIndex] );
+				}
+
+				const u32 localOffset = counters[bucketIndex] + offset;
+				const u32 to = localOffset + localPrefixSum[bucketIndex];
+
+				ElementLocation el;
+				el.localSrcIndex = i + threadIdx.x;
+				el.localOffset = localOffset;
+				el.bucket = bucketIndex;
+				elementLocations[to] = el;
+			}
+
+			__syncthreads();
+
+			if( itemIndex < numberOfInputs )
+			{
+				atomicInc( &counters[bucketIndex], 0xFFFFFFFF );
+			}
+
+			if( flushMask )
+			{
+				matchMasks[warp][bucketIndex] = 0;
+			}
+		}
+
+		for( int i = 0; i < SORT_SUBBLOCK_SIZE; i += SORT_WG_SIZE )
+		{
+			int itemIndex = blockIdx.x * gNItemsPerWG + j + i + threadIdx.x;
+			if( itemIndex < numberOfInputs )
+			{
+				ElementLocation el = elementLocations[i + threadIdx.x];
+				u32 srcIndex = blockIdx.x * gNItemsPerWG + j + el.localSrcIndex;
+				u8 bucketIndex = el.bucket;
+
+				u32 dstIndex = globalOffset[bucketIndex] + el.localOffset;
+				gDstKey[dstIndex] = gSrcKey[srcIndex];
+
+				if constexpr( KEY_VALUE_PAIR )
+				{
+					gDstVal[dstIndex] = gSrcVal[srcIndex];
+				}
+			}
+		}
+
+		__syncthreads();
+
+		for( int i = threadIdx.x; i < BIN_SIZE; i += SORT_WG_SIZE )
+		{
+			globalOffset[i] += counters[i];
+		}
+
+		__syncthreads();
+	}
+
+
+#if 0
 	__shared__ u32 globalOffset[BIN_SIZE];
 	__shared__ u32 localPrefixSum[BIN_SIZE];
 	__shared__ u32 counters[BIN_SIZE];
@@ -731,6 +881,7 @@ __device__ void SortImpl( int* gSrcKey, int* gSrcVal, int* gDstKey, int* gDstVal
 			gDstVal[dstIndex] = tmpSrcVal[tmpSrcIndex];
 		}
 	}
+#endif
 }
 
 extern "C" __global__ void SortKernel( int* gSrcKey, int* gDstKey, int* gHistogram, int gN, int gNItemsPerWG, const int START_BIT, const int N_WGS_EXECUTED )
