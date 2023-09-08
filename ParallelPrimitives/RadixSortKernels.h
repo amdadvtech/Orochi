@@ -615,18 +615,50 @@ extern "C" __global__ void ParallelExclusiveScanAllWG( int* gCount, int* gHistog
 	gHistogram[blockIdx.x * blockDim.x + threadIdx.x] = blockBuffer[threadIdx.x] + currentGlobalOffset;
 }
 
+template<int NThreads>
+__device__ inline uint32_t prefixSumExclusive( uint32_t prefix, uint32_t* sMemIO )
+{
+	uint32_t value = sMemIO[threadIdx.x];
+
+	for( uint32_t offset = 1; offset < NThreads; offset <<= 1 )
+	{
+		uint32_t x = sMemIO[threadIdx.x];
+
+		if( offset <= threadIdx.x )
+		{
+			x += sMemIO[threadIdx.x - offset];
+		}
+
+		__syncthreads();
+
+		sMemIO[threadIdx.x] = x;
+
+		__syncthreads();
+	}
+	uint32_t sum = sMemIO[NThreads - 1];
+
+	__syncthreads();
+
+	sMemIO[threadIdx.x] += prefix - value;
+
+	__syncthreads();
+
+	return sum;
+}
+
 template<bool KEY_VALUE_PAIR>
 __device__ void SortImpl( int* gSrcKey, int* gSrcVal, int* gDstKey, int* gDstVal, int* gHistogram, int numberOfInputs, int gNItemsPerWG, const int START_BIT, const int N_WGS_EXECUTED )
 {
-#if defined( __CUDACC__ )
+//#if defined( __CUDACC__ )
+//	constexpr int SORT_SUBBLOCK_SIZE = 2048;
+//#else
+//	constexpr int SORT_SUBBLOCK_SIZE = 4096;
+//#endif
 	constexpr int SORT_SUBBLOCK_SIZE = 2048;
-#else
-	constexpr int SORT_SUBBLOCK_SIZE = 4096;
-#endif
 
 	const int startOffset = blockIdx.x * gNItemsPerWG;
 	const int nItemInBlock = ( startOffset + gNItemsPerWG > numberOfInputs ) ? numberOfInputs - startOffset : gNItemsPerWG;
-
+	
 	struct ElementLocation
 	{
 		u32 localSrcIndex : 12;
@@ -678,7 +710,11 @@ __device__ void SortImpl( int* gSrcKey, int* gSrcVal, int* gDstKey, int* gDstVal
 
 		__syncthreads();
 
-		ldsScanExclusive( localPrefixSum, BIN_SIZE );
+		// This uses extra shared memory:
+		// ldsScanExclusive( localPrefixSum, BIN_SIZE );
+
+		// warning: It is a temporal change assume BIN_SIZE == blockDim.x
+		prefixSumExclusive<BIN_SIZE>( 0, localPrefixSum );
 
 		__syncthreads();
 
