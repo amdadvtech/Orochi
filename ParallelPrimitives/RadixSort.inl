@@ -38,6 +38,9 @@ constexpr void execute( CallableType&& callable, RecordType& time_record, const 
 }
 } // namespace
 
+inline uint64_t div_round_up64( uint64_t val, uint64_t divisor ) { return ( val + divisor - 1 ) / divisor; }
+inline uint64_t next_multiple64( uint64_t val, uint64_t divisor ) { return div_round_up64( val, divisor ) * divisor; }
+
 template<class T>
 void RadixSort::sort1pass( const T src, const T dst, int n, int startBit, int endBit, oroStream stream ) noexcept
 {
@@ -129,6 +132,17 @@ void RadixSort::sort1pass( const T src, const T dst, int n, int startBit, int en
 		const auto num_total_thread_for_sort = m_num_threads_per_block_for_sort * num_blocks_for_sort;
 		const auto num_items_per_block = nItemPerWG;
 
+		constexpr int SORT_SUBBLOCK_SIZE = 2048;
+		const int nSubBlocksPerBlock = div_round_up64( nItemPerWG, SORT_SUBBLOCK_SIZE );
+		const int nSubBlocks = nSubBlocksPerBlock * num_blocks_for_sort;
+
+		static u32* s_iterators = nullptr;
+		if( s_iterators == nullptr )
+		{
+			oroMalloc( (oroDeviceptr*)&s_iterators, sizeof( u32 ) * num_blocks_for_sort );
+		}
+		oroMemsetD32Async( (oroDeviceptr)s_iterators, 0, num_blocks_for_sort, stream );
+
 		if constexpr( enable_key_value_pair_sorting )
 		{
 			const void* args[] = { &srcKey, &srcVal, &dstKey, &dstVal, arg_cast( m_tmp_buffer.address() ), &n, &num_items_per_block, &startBit, &num_blocks_for_sort };
@@ -136,8 +150,9 @@ void RadixSort::sort1pass( const T src, const T dst, int n, int startBit, int en
 		}
 		else
 		{
-			const void* args[] = { &srcKey, &dstKey, arg_cast( m_tmp_buffer.address() ), &n, &num_items_per_block, &startBit, &num_blocks_for_sort };
-			OrochiUtils::launch1D( oroFunctions[Kernel::SORT], num_total_thread_for_sort, args, m_num_threads_per_block_for_sort, 0, stream );
+			const void* args[] = { &srcKey, &dstKey, arg_cast( m_tmp_buffer.address() ), &n, &num_items_per_block, &startBit, &num_blocks_for_sort, &nSubBlocksPerBlock, &s_iterators };
+			// OrochiUtils::launch1D( oroFunctions[Kernel::SORT], num_total_thread_for_sort, args, m_num_threads_per_block_for_sort, 0, stream );
+			OrochiUtils::launch1D( oroFunctions[Kernel::SORT], nSubBlocks * m_num_threads_per_block_for_sort, args, m_num_threads_per_block_for_sort, 0, stream );
 		}
 	};
 

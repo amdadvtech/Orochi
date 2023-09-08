@@ -217,7 +217,7 @@ void RadixSort::configure( const std::string& kernelPath, const std::string& inc
 
 	m_num_blocks_for_count = calculateWGsToExecute( m_num_threads_per_block_for_count );
 	// m_num_blocks_for_count = 39063;
-	m_num_blocks_for_count = 78125;
+	// m_num_blocks_for_count = 78125;
 	printf( "m_num_blocks_for_count %d\n", m_num_blocks_for_count );
 
 	/// The tmp buffer size of the count kernel and the scan kernel.
