@@ -9,10 +9,15 @@ __device__ T ReduceBlock( T val, volatile T* smem )
 	__syncthreads(); 
 	for( int i = 1; i < blockDim.x; i <<= 1 )
 	{
-		smem[threadIdx.x] += smem[threadIdx.x ^ i];
+		/* note: A bit trick to minimize reading from shared memory
+		int mask = ( i << 1 ) - 1;
+		if( ( threadIdx.x & mask ) == 0 )
+		*/
+		if( threadIdx.x < ( threadIdx.x ^ i ) )
+			smem[threadIdx.x] += smem[threadIdx.x ^ i];
 		__syncthreads(); // Make sure that the data has been updated
 	}
-	return smem[threadIdx.x];
+	return smem[0];
 }
 
 // Warp-wise reduction (addtion operator) using the shuffle instruction
