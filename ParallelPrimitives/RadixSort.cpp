@@ -239,6 +239,7 @@ void RadixSort::configure( const std::string& kernelPath, const std::string& inc
 		// These are for the scan kernel
 		m_partial_sum.resize( m_num_blocks_for_scan );
 		m_is_ready.resize( m_num_blocks_for_scan );
+		m_is_ready.reset();
 	}
 }
 void RadixSort::setFlag( Flag flag ) noexcept { m_flags = flag; }
