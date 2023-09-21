@@ -115,9 +115,7 @@ void RadixSort::compileKernels( const std::string& kernelPath, const std::string
 		m_num_threads_per_block_for_scan = DEFAULT_SCAN_BLOCK_SIZE;
 		m_num_threads_per_block_for_sort = DEFAULT_SORT_BLOCK_SIZE;
 
-		const auto warp_size = DEFAULT_WARP_SIZE;
-
-		m_num_warps_per_block_for_sort = m_num_threads_per_block_for_sort / warp_size;
+		m_warp_size = DEFAULT_WARP_SIZE;
 	}
 	else
 	{
@@ -127,14 +125,14 @@ void RadixSort::compileKernels( const std::string& kernelPath, const std::string
 		m_num_threads_per_block_for_scan = m_props.maxThreadsPerBlock > 0 ? m_props.maxThreadsPerBlock : DEFAULT_SCAN_BLOCK_SIZE;
 		m_num_threads_per_block_for_sort = m_props.maxThreadsPerBlock > 0 ? m_props.maxThreadsPerBlock : DEFAULT_SORT_BLOCK_SIZE;
 
-		const auto warp_size = ( m_props.warpSize != 0 ) ? m_props.warpSize : DEFAULT_WARP_SIZE;
-
-		m_num_warps_per_block_for_sort = m_num_threads_per_block_for_sort / warp_size;
+		m_warp_size = ( m_props.warpSize != 0 ) ? m_props.warpSize : DEFAULT_WARP_SIZE;
 
 		assert( m_num_threads_per_block_for_count % warp_size == 0 );
 		assert( m_num_threads_per_block_for_scan % warp_size == 0 );
 		assert( m_num_threads_per_block_for_sort % warp_size == 0 );
 	}
+
+	m_num_warps_per_block_for_sort = m_num_threads_per_block_for_sort / m_warp_size;
 
 	if( m_flags == Flag::LOG )
 	{
@@ -149,6 +147,7 @@ void RadixSort::compileKernels( const std::string& kernelPath, const std::string
 	const auto sort_num_warps_param = "-DSORT_NUM_WARPS_PER_BLOCK_VAL=" + std::to_string( m_num_warps_per_block_for_sort );
 
 	std::vector<const char*> opts;
+	opts.push_back("-ffast-math");
 	opts.push_back( includeArg.c_str() );
 	opts.push_back( overwrite_flag );
 	opts.push_back( count_block_size_param.c_str() );
@@ -192,9 +191,8 @@ void RadixSort::compileKernels( const std::string& kernelPath, const std::string
 
 int RadixSort::calculateWGsToExecute( const int blockSize ) const noexcept
 {
-	const int warpSize = ( m_props.warpSize != 0 ) ? m_props.warpSize : DEFAULT_WARP_SIZE;
-	const int warpPerWG = blockSize / warpSize;
-	const int warpPerWGP = m_props.maxThreadsPerMultiProcessor / warpSize;
+	const int warpPerWG = blockSize / m_warp_size;
+	const int warpPerWGP = m_props.maxThreadsPerMultiProcessor / m_warp_size;
 	const int occupancyFromWarp = ( warpPerWGP > 0 ) ? ( warpPerWGP / warpPerWG ) : 1;
 
 	const int occupancy = std::max( 1, occupancyFromWarp );
