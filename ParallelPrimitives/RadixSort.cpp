@@ -127,9 +127,9 @@ void RadixSort::compileKernels( const std::string& kernelPath, const std::string
 
 		m_warp_size = ( m_props.warpSize != 0 ) ? m_props.warpSize : DEFAULT_WARP_SIZE;
 
-		assert( m_num_threads_per_block_for_count % warp_size == 0 );
-		assert( m_num_threads_per_block_for_scan % warp_size == 0 );
-		assert( m_num_threads_per_block_for_sort % warp_size == 0 );
+		assert( m_num_threads_per_block_for_count % m_warp_size == 0 );
+		assert( m_num_threads_per_block_for_scan % m_warp_size == 0 );
+		assert( m_num_threads_per_block_for_sort % m_warp_size == 0 );
 	}
 
 	m_num_warps_per_block_for_sort = m_num_threads_per_block_for_sort / m_warp_size;
@@ -147,7 +147,7 @@ void RadixSort::compileKernels( const std::string& kernelPath, const std::string
 	const auto sort_num_warps_param = "-DSORT_NUM_WARPS_PER_BLOCK_VAL=" + std::to_string( m_num_warps_per_block_for_sort );
 
 	std::vector<const char*> opts;
-	opts.push_back("-ffast-math");
+	opts.push_back( "-ffast-math" );
 	opts.push_back( includeArg.c_str() );
 	opts.push_back( overwrite_flag );
 	opts.push_back( count_block_size_param.c_str() );
