@@ -1,6 +1,6 @@
 #include <common/Common.h>
 
-class DynamicAllocationSample : public Sample
+class PoolAllocatorSample : public Sample
 {
   public:
 	void run( u32 size ) 
@@ -54,7 +54,7 @@ class DynamicAllocationSample : public Sample
 		{
 			// Compile function from the source code caching the compiled module
 			// Sometimes it is necesarry to clear the cache (Course/build/cache)
-			oroFunction func = m_utils.getFunctionFromFile( m_device, "../07_DynamicAllocation/Kernels.h", kernelName, &opts );
+			oroFunction func = m_utils.getFunctionFromFile( m_device, "../07_PoolAllocator/Kernels.h", kernelName, &opts );
 
 			// Kernel arguments
 			const void* args[] = { &size, &stackSize, &stackCount, d_stackBuffer.address(), d_locks.address(), d_nodes.address(), d_leaves.address(), d_queries.address(), d_counts.address() };
@@ -107,7 +107,7 @@ class DynamicAllocationSample : public Sample
 
 int main( int argc, char** argv )
 {
-	DynamicAllocationSample sample;
+	PoolAllocatorSample sample;
 	sample.run( 16 * 1000 * 1 );
 	sample.run( 16 * 1000 * 10 );
 	sample.run( 16 * 1000 * 100 );
