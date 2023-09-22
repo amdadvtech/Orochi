@@ -45,8 +45,7 @@ class PersistentThreadsSample : public Sample
 			CHECK_ORO( oroDrvOccupancyMaxActiveBlocksPerMultiprocessor( &blockCount, func, BlockSize, 0 ) );
 
 			// The number of persistent threads
-			u32 threads = prop.multiProcessorCount * blockCount * prop.warpSize;
-			threads = ( threads + BlockSize - 1 ) / BlockSize * BlockSize;
+			u32 threads = prop.multiProcessorCount * blockCount * BlockSize;
 
 			// Kernel arguments
 			const void* args[] = { &size, &threads, &Bins, d_input.address(), d_output.address(), d_counter.address() };
@@ -86,7 +85,7 @@ class PersistentThreadsSample : public Sample
 				float time = sw.getMs();
 				float speed = static_cast<float>( size ) / 1000.0f / 1000.0f / time;
 				float items = size / 1000.0f / 1000.0f;
-				std::cout << "Histogram of " << std::setprecision( 2 ) << items << " computed in " << time << " ms (" << speed << " GItems/s) [" << kernelName << "] " << std::endl;
+				std::cout << "Histogram of " << size << " items computed in " << time << " ms (" << speed << " GItems/s) [" << kernelName << "] " << std::endl;
 			}
 		};
 
