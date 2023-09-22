@@ -10,8 +10,6 @@ extern "C" __global__ void HistogramKernel( u32 size, u32 threads, u32 bins, con
 	u32 warpsPerBlock = ( blockDim.x + warpSize - 1 ) / warpSize;
 	// The total number of warps 
 	u32 warps = gridDim.x * warpsPerBlock;
-	// Thhe global warp index
-	u32 warpIndex = threadIdx.x / warpSize + blockIdx.x * warpsPerBlock;
 
 	// Reset the histogram
 	for( u32 i = index; i < bins; i += threads )

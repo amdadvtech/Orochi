@@ -46,6 +46,7 @@ class PersistentThreadsSample : public Sample
 
 			// The number of persistent threads
 			u32 threads = prop.multiProcessorCount * blockCount * prop.warpSize;
+			threads = ( threads + BlockSize - 1 ) / BlockSize * BlockSize;
 
 			// Kernel arguments
 			const void* args[] = { &size, &threads, &Bins, d_input.address(), d_output.address(), d_counter.address() };
