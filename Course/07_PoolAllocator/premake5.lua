@@ -1,4 +1,4 @@
-project "07_DynamicAllocation"
+project "07_PoolAllocator"
       kind "ConsoleApp"
 
       targetdir "../bin/%{cfg.buildcfg}"

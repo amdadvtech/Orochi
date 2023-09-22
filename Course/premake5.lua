@@ -75,7 +75,7 @@ workspace "Course"
    include "./04_BottomUpTraversal"
    include "./05_WaterfallScheme"
    include "./06_PersistentThreads"
-   include "./07_DynamicAllocation"
+   include "./07_PoolAllocator"
    include "./08_LinearProbing"
    include "./09_RadixSort"
    
