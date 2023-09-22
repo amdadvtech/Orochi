@@ -569,6 +569,11 @@ oroError OROAPI oroMemAllocPitch(oroDeviceptr* dptr, size_t* pPitch, size_t Widt
 {
 	return oroErrorUnknown;
 }
+oroError OROAPI oroMallocManaged(oroDeviceptr* dptr, size_t bytesize, oroManagedMemoryAttachFlags flags)
+{
+	__ORO_FUNC1( MemAllocManaged((CUdeviceptr*)dptr, bytesize, (CUmemAttach_flags_enum)flags), MallocManaged( dptr, bytesize, (HIPmemAttach_flags_enum)flags ) );
+	return oroErrorUnknown;
+}
 oroError OROAPI oroFree(oroDeviceptr dptr)
 {
 	__ORO_FUNC1( MemFree( dptr ), Free( dptr ) );
@@ -688,8 +693,7 @@ oroError OROAPI oroModuleLaunchKernel(oroFunction f, unsigned int gridDimX, unsi
 		ModuleLaunchKernel( (hipFunction_t)f, gridDimX, gridDimY, gridDimZ, blockDimX, blockDimY, blockDimZ, sharedMemBytes, (hipStream_t)hStream, kernelParams, extra ) );
 	return oroErrorUnknown;
 }
-
-oroError OROAPI oroDrvOccupancyMaxActiveBlocksPerMultiprocessor(int* numBlocks, oroFunction func, int blockSize, size_t dynamicSMemSize)
+oroError OROAPI oroOccupancyMaxActiveBlocksPerMultiprocessor( int* numBlocks, oroFunction func, int blockSize, size_t dynamicSMemSize )
 {
 	if( s_api & ORO_API_CUDADRIVER )
 		return cu2oro( cuOccupancyMaxActiveBlocksPerMultiprocessor( numBlocks, (CUfunction)func, blockSize, dynamicSMemSize ) );
@@ -697,7 +701,6 @@ oroError OROAPI oroDrvOccupancyMaxActiveBlocksPerMultiprocessor(int* numBlocks, 
 		return hip2oro( hipModuleOccupancyMaxActiveBlocksPerMultiprocessor( numBlocks, (hipFunction_t)func, blockSize, dynamicSMemSize ) );
 	return oroErrorUnknown;
 }
-
 oroError OROAPI oroModuleOccupancyMaxPotentialBlockSize( int* minGridSize, int* blockSize, oroFunction func, size_t dynamicSMemSize, int blockSizeLimit ) 
 { 
 	if( s_api & ORO_API_CUDADRIVER )

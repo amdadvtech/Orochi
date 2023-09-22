@@ -220,7 +220,7 @@ typedef enum HIPipcMem_flags_enum {
 typedef enum HIPmemAttach_flags_enum {
   hipMemAttachGlobal = 0x1,
   hipMemAttachHost = 0x2,
-  HIP_MEM_ATTACH_SINGLE = 0x4,
+  hipMemAttachSingle  = 0x4,
 } HIPmemAttach_flags;
 
 typedef enum HIPctx_flags_enum {
@@ -1257,8 +1257,8 @@ typedef hipError_t HIPAPI thipEventElapsedTime(float* pMilliseconds, hipEvent_t 
 typedef hipError_t HIPAPI thipFuncGetAttribute(int* pi, hipFunction_attribute attrib, hipFunction_t hfunc);
 typedef hipError_t HIPAPI thipFuncSetCacheConfig(hipFunction_t hfunc, hipFuncCache_t config);
 typedef hipError_t HIPAPI thipModuleLaunchKernel(hipFunction_t f, unsigned int gridDimX, unsigned int gridDimY, unsigned int gridDimZ, unsigned int blockDimX, unsigned int blockDimY, unsigned int blockDimZ, unsigned int sharedMemBytes, hipStream_t hStream, void** kernelParams, void** extra);
-typedef hipError_t HIPAPI thipModuleOccupancyMaxActiveBlocksPerMultiprocessor(int* numBlocks, hipFunction_t func, int blockSize, size_t dynamicSMemSize);
-typedef hipError_t HIPAPI thipModuleOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(int* numBlocks, hipFunction_t func, int blockSize, size_t dynamicSMemSize, unsigned int flags);
+typedef hipError_t HIPAPI thipModuleOccupancyMaxActiveBlocksPerMultiprocessor( int* numBlocks, hipFunction_t func, int blockSize, size_t dynamicSMemSize );
+typedef hipError_t HIPAPI thipModuleOccupancyMaxActiveBlocksPerMultiprocessorWithFlags( int* numBlocks, hipFunction_t func, int blockSize, size_t dynamicSMemSize, unsigned int flags );
 typedef hipError_t HIPAPI thipModuleOccupancyMaxPotentialBlockSize(int* minGridSize, int* blockSize, hipFunction_t func, size_t dynamicSMemSize, int blockSizeLimit);
 typedef hipError_t HIPAPI thipTexRefSetArray(hipTexRef hTexRef, hArray * hArray, unsigned int Flags);
 typedef hipError_t HIPAPI thipTexRefSetAddress(size_t* ByteOffset, hipTexRef hTexRef, hipDeviceptr_t dptr, size_t bytes);

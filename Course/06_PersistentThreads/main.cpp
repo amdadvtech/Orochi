@@ -42,7 +42,7 @@ class PersistentThreadsSample : public Sample
 
 			// Query the number of active blocks per SM via the occupancy API
 			int blockCount;
-			CHECK_ORO( oroDrvOccupancyMaxActiveBlocksPerMultiprocessor( &blockCount, func, BlockSize, 0 ) );
+			CHECK_ORO( oroOccupancyMaxActiveBlocksPerMultiprocessor( &blockCount, func, BlockSize, 0 ) );
 
 			// The number of persistent threads
 			u32 threads = prop.multiProcessorCount * blockCount * BlockSize;

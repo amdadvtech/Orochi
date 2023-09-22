@@ -496,6 +496,13 @@ typedef enum OROmem_range_attribute_enum {
     ORO_MEM_RANGE_ATTRIBUTE_LAST_PREFETCH_LOCATION = 4,
 } PPmem_range_attribute;
 
+typedef enum oroManagedMemoryAttachFlags
+{
+    oroMemAttachGlobal = 0x1,
+    oroMemAttachHost = 0x2,
+    oroMemAttachSingle = 0x4,
+}oroManagedMemoryAttachFlags;
+
 typedef enum oroJitOption {
     oroJitOptionMaxRegisters = 0,
     oroJitOptionThreadsPerBlock,
@@ -641,6 +648,7 @@ oroError OROAPI oroMemGetInfo(size_t* free, size_t* total);
 oroError OROAPI oroMalloc(oroDeviceptr* dptr, size_t bytesize);
 oroError OROAPI oroMalloc2(oroDeviceptr* dptr, size_t bytesize);
 oroError OROAPI oroMemAllocPitch(oroDeviceptr* dptr, size_t* pPitch, size_t WidthInBytes, size_t Height, unsigned int ElementSizeBytes);
+oroError OROAPI oroMallocManaged(oroDeviceptr* dptr, size_t bytesize, oroManagedMemoryAttachFlags flags);
 oroError OROAPI oroFree(oroDeviceptr dptr);
 oroError OROAPI oroFree2(oroDeviceptr dptr);
 //oroError OROAPI oroMemGetAddressRange(oroDeviceptr* pbase, size_t* psize, oroDeviceptr dptr);
@@ -650,7 +658,6 @@ oroError OROAPI oroFree2(oroDeviceptr dptr);
 oroError OROAPI oroHostRegister(void* p, size_t bytesize, unsigned int Flags);
 oroError OROAPI oroHostGetDevicePointer(oroDeviceptr* pdptr, void* p, unsigned int Flags);
 //oroError OROAPI oroHostGetFlags(unsigned int* pFlags, void* p);
-//oroError OROAPI oroMallocManaged(oroDeviceptr* dptr, size_t bytesize, unsigned int flags);
 //oroError OROAPI oroDeviceGetByPCIBusId(hipDevice_t* dev, const char* pciBusId);
 //oroError OROAPI oroDeviceGetPCIBusId(char* pciBusId, int len, hipDevice_t dev);
 oroError OROAPI oroHostUnregister(void* p);
@@ -701,7 +708,7 @@ oroError OROAPI oroEventElapsedTime(float* pMilliseconds, oroEvent hStart, oroEv
 oroError OROAPI oroFuncGetAttribute(int* pi, oroFunction_attribute attrib, oroFunction hfunc);
 //oroError OROAPI oroFuncSetCacheConfig(hipFunction_t hfunc, hipFuncCache_t config);
 oroError OROAPI oroModuleLaunchKernel(oroFunction f, unsigned int gridDimX, unsigned int gridDimY, unsigned int gridDimZ, unsigned int blockDimX, unsigned int blockDimY, unsigned int blockDimZ, unsigned int sharedMemBytes, oroStream hStream, void** kernelParams, void** extra);
-oroError OROAPI oroDrvOccupancyMaxActiveBlocksPerMultiprocessor( int* numBlocks, oroFunction func, int blockSize, size_t dynamicSMemSize );
+oroError OROAPI oroOccupancyMaxActiveBlocksPerMultiprocessor( int* numBlocks, oroFunction func, int blockSize, size_t dynamicSMemSize );
 //oroError OROAPI oroDrvOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(int* numBlocks, hipFunction_t func, int blockSize, size_t dynamicSMemSize, unsigned int flags);
 oroError OROAPI oroModuleOccupancyMaxPotentialBlockSize(int* minGridSize, int* blockSize, oroFunction 
     
