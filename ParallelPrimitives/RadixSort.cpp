@@ -30,6 +30,12 @@ constexpr auto useBitCode = false;
 constexpr auto useBakeKernel = true;
 #else
 constexpr auto useBakeKernel = false;
+static const char* hip_RadixSortKernels = nullptr;
+namespace hip
+{
+static const char** RadixSortKernelsArgs = nullptr;
+static const char** RadixSortKernelsIncludes = nullptr;
+} // namespace hip
 #endif
 
 static_assert( !( useBitCode && useBakeKernel ), "useBitCode and useBakeKernel cannot coexist" );
