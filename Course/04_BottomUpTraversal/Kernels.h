@@ -47,5 +47,8 @@ extern "C" __global__ void BottomUpTraversalKernel( u32 size, const Node* nodes,
 
 		// Go to parent
 		index = node.m_parentAddr;
+
+		// Make sure that the operations are done in order
+		__threadfence();
 	}
 }
