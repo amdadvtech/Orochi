@@ -272,7 +272,16 @@ void hipewInit( int* resultDriver, int* resultRtc, hipuint32_t flags )
 #ifdef _WIN32
   /* Expected in C:/Windows/System32 or similar, no path needed. */
   const char* hip_paths[] = {"amdhip64.dll", NULL};
-  const char *hiprtc_paths[] = { "hiprtc0505.dll", 
+  const char* hiprtc_paths[] = {
+                                "hiprtc0605.dll",
+                                "hiprtc0604.dll",
+                                "hiprtc0603.dll",
+                                "hiprtc0602.dll",
+                                "hiprtc0601.dll",
+                                "hiprtc0600.dll",
+                                "hiprtc0507.dll",  
+                                "hiprtc0506.dll", 
+                                "hiprtc0505.dll", 
                                 "hiprtc0504.dll",
                                 "hiprtc0503.dll",
                                 NULL};
@@ -281,8 +290,10 @@ void hipewInit( int* resultDriver, int* resultRtc, hipuint32_t flags )
   const char *hip_paths[] = {"", NULL};
   const char* hiprtc_paths[] = { NULL };
 #else
-  const char *hip_paths[] = {"/opt/rocm/hip/lib/libamdhip64.so", NULL};
-  const char* hiprtc_paths[] = { "/opt/rocm/hip/lib/libhiprtc.so", NULL };
+  const char *hip_paths[] = { "/opt/rocm/hip/lib/libamdhip64.so",
+                              "/opt/rocm/lib/libamdhip64.so", NULL };
+  const char* hiprtc_paths[] = { "/opt/rocm/hip/lib/libhiprtc.so",
+                              "/opt/rocm/lib/libhiprtc.so", NULL };
 #endif
   static int initialized = 0;
   static int s_resultDriver = 0;
