@@ -32,7 +32,7 @@ class RadixSort final
 		LOG,
 	};
 
-	RadixSort( oroDevice device, OrochiUtils& oroutils, const std::string& kernelPath = "", const std::string& includeDir = "", oroStream stream = 0 );
+	RadixSort( oroDevice device, OrochiUtils& oroutils, oroStream stream = 0, const std::string& kernelPath = "", const std::string& includeDir = "" );
 
 	// Allow move but disallow copy.
 	RadixSort( RadixSort&& ) noexcept = default;

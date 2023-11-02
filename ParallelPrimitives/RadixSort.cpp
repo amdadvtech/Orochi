@@ -70,7 +70,7 @@ void printKernelInfo( const std::string& name, oroFunction func )
 namespace Oro
 {
 
-RadixSort::RadixSort( oroDevice device, OrochiUtils& oroutils, const std::string& kernelPath, const std::string& includeDir, oroStream stream ) : m_device{ device }, m_oroutils{ oroutils }
+RadixSort::RadixSort( oroDevice device, OrochiUtils& oroutils, oroStream stream, const std::string& kernelPath, const std::string& includeDir ) : m_device{ device }, m_oroutils{ oroutils }
 {
 	oroGetDeviceProperties( &m_props, device );
 	configure( kernelPath, includeDir, stream );
