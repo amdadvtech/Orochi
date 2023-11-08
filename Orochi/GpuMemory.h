@@ -94,6 +94,10 @@ class GpuMemory final
 	/// @brief Reset the memory space so that all bits inside are cleared to zero.
 	void reset() noexcept { OrochiUtils::memset( m_data, 0, m_size * sizeof( T ) ); }
 
+
+	/// @brief Reset the memory space so that all bits inside are cleared to zero.
+	void reset( int val ) noexcept { OrochiUtils::memset( m_data, val, m_size * sizeof( T ) ); }
+
 	/// @brief Copy the data from device memory to host.
 	/// @param host_ptr The host pointer.
 	/// @param host_data_size The size of the host memory which represents the number of elements.
