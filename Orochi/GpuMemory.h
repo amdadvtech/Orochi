@@ -95,7 +95,7 @@ class GpuMemory final
 	void reset() noexcept { OrochiUtils::memset( m_data, 0, m_size * sizeof( T ) ); }
 
 
-	/// @brief Reset the memory space so that all bits inside are cleared to zero.
+	/// @brief Reset the memory space so that all of the memory block is set to val.
 	void reset( int val ) noexcept { OrochiUtils::memset( m_data, val, m_size * sizeof( T ) ); }
 
 	/// @brief Copy the data from device memory to host.
