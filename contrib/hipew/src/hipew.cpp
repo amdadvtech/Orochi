@@ -196,6 +196,9 @@ thipGraphicsResourceGetMappedPointer *hipGraphicsResourceGetMappedPointer;
 thipGraphicsGLRegisterBuffer *hipGraphicsGLRegisterBuffer;
 thipGLGetDevices *hipGLGetDevices;
 thipImportExternalMemory *hipImportExternalMemory;
+thipExternalMemoryGetMappedMipmappedArray *hipExternalMemoryGetMappedMipmappedArray;
+thipGetMipmappedArrayLevel *hipGetMipmappedArrayLevel;
+thipCreateSurfaceObject *hipCreateSurfaceObject;
 thipImportExternalSemaphore* hipImportExternalSemaphore;
 thipDestroyExternalSemaphore* hipDestroyExternalSemaphore;
 thipExternalMemoryGetMappedBuffer *hipExternalMemoryGetMappedBuffer;
@@ -476,6 +479,9 @@ void hipewInit( int* resultDriver, int* resultRtc, hipuint32_t flags )
   HIP_LIBRARY_FIND_CHECKED(hipDestroyExternalSemaphore);
   HIP_LIBRARY_FIND_CHECKED(hipSignalExternalSemaphoresAsync);
   HIP_LIBRARY_FIND_CHECKED(hipWaitExternalSemaphoresAsync);
+  HIP_LIBRARY_FIND_CHECKED(hipExternalMemoryGetMappedMipmappedArray);
+  HIP_LIBRARY_FIND_CHECKED(hipGetMipmappedArrayLevel);
+  HIP_LIBRARY_FIND_CHECKED(hipCreateSurfaceObject);
 
   s_resultDriver = HIPEW_SUCCESS;
   *resultDriver = s_resultDriver;

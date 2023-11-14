@@ -104,4 +104,5 @@ workspace "YamatanoOrochi"
         include "./Test/VulkanComputeSimple"
         include "./Test/RadixSort"
         include "./Test/simpleD3D12"
+        include "./Test/simpleD3D12_texture"
      end

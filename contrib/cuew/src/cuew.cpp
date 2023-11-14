@@ -62,10 +62,14 @@ typedef void *DynamicLibrary;
 #define CUDA_LIBRARY_FIND_CHECKED(name) _LIBRARY_FIND_CHECKED(cuda_lib, name)
 #define CUDA_LIBRARY_FIND(name) _LIBRARY_FIND(cuda_lib, name)
 
+#define CUDART_LIBRARY_FIND_CHECKED(name) _LIBRARY_FIND_CHECKED(cudart_lib, name)
+#define CUDART_LIBRARY_FIND(name) _LIBRARY_FIND(cudart_lib, name)
+
 #define NVRTC_LIBRARY_FIND_CHECKED(name) _LIBRARY_FIND_CHECKED(nvrtc_lib, name)
 #define NVRTC_LIBRARY_FIND(name) _LIBRARY_FIND(nvrtc_lib, name)
 
 static DynamicLibrary cuda_lib;
+static DynamicLibrary cudart_lib;
 static DynamicLibrary nvrtc_lib;
 
 /* Function definitions. */
@@ -209,6 +213,9 @@ tcuEventSynchronize *cuEventSynchronize;
 tcuEventDestroy_v2 *cuEventDestroy_v2;
 tcuEventElapsedTime *cuEventElapsedTime;
 tcuImportExternalMemory *cuImportExternalMemory;
+tcuExternalMemoryGetMappedMipmappedArray *cuExternalMemoryGetMappedMipmappedArray;
+tcuGetMipmappedArrayLevel *cuGetMipmappedArrayLevel;
+tcuCreateSurfaceObject *cuCreateSurfaceObject;
 tcuImportExternalSemaphore* cuImportExternalSemaphore;
 tcuExternalMemoryGetMappedBuffer *cuExternalMemoryGetMappedBuffer;
 tcuDestroyExternalMemory *cuDestroyExternalMemory;
@@ -532,6 +539,7 @@ static int cuewCudaInit(void)
   CUDA_LIBRARY_FIND(cuEventDestroy_v2);
   CUDA_LIBRARY_FIND(cuEventElapsedTime);
   CUDA_LIBRARY_FIND(cuImportExternalMemory);
+  CUDA_LIBRARY_FIND(cuExternalMemoryGetMappedMipmappedArray);
   CUDA_LIBRARY_FIND(cuImportExternalSemaphore);
   CUDA_LIBRARY_FIND(cuExternalMemoryGetMappedBuffer);
   CUDA_LIBRARY_FIND(cuDestroyExternalMemory);
@@ -709,6 +717,67 @@ static int cuewNvrtcInit(void)
   return result;
 }
 
+static void cuewExitCudart(void)
+{
+  if (cudart_lib != NULL) {
+    /*  Ignore errors. */
+    dynamic_library_close(cudart_lib);
+    cudart_lib = NULL;
+  }
+}
+
+static int cuewCudartInit(void)
+{
+  /* Library paths. */
+#ifdef _WIN32
+  /* Expected in c:/windows/system or similar, no path needed. */
+  const char* cudart_paths[] = {"cudart64_12.dll",
+                               NULL};
+#elif defined(__APPLE__)
+  /* Default installation path. */
+  const char *cudart_paths[] = {"/usr/local/cuda/lib/libcudart.dylib", NULL};
+#else
+  const char *cudart_paths[] = {
+    "libcudart.so",
+#  if defined(__x86_64__) || defined(_M_X64)
+    "/usr/local/cuda/lib64/libcudart.so",
+#  else
+    "/usr/local/cuda/lib/libcudart.so",
+#  endif
+    NULL
+  };
+#endif
+  static int initialized = 0;
+  static int result = 0;
+  int error;
+
+  if (initialized) {
+    return result;
+  }
+
+  initialized = 1;
+
+  error = atexit(cuewExitCudart);
+  if (error) {
+    result = CUEW_ERROR_ATEXIT_FAILED;
+    return result;
+  }
+
+  /* Load library. */
+  cudart_lib = dynamic_library_open_find(cudart_paths);
+
+  if (cudart_lib == NULL) {
+    result = CUEW_ERROR_OPEN_FAILED;
+    return result;
+  }
+
+  cuGetMipmappedArrayLevel = (tcuGetMipmappedArrayLevel *)dynamic_library_find(cudart_lib,  "cudaGetMipmappedArrayLevel" );
+  cuCreateSurfaceObject = (tcuCreateSurfaceObject *)dynamic_library_find(cudart_lib,  "cudaCreateSurfaceObject" );
+
+  result = CUEW_SUCCESS;
+  return result;
+}
+
 void cuewInit( int* resultDriver, int* resultRtc, cuuint32_t flags )
 {
   *resultDriver = CUEW_NOT_INITIALIZED;
@@ -719,6 +788,9 @@ void cuewInit( int* resultDriver, int* resultRtc, cuuint32_t flags )
   }
   if (flags & CUEW_INIT_NVRTC) {
     *resultRtc = cuewNvrtcInit();
+  }
+  if (flags & CUEW_INIT_CUDART) {
+    *resultDriver = cuewCudartInit();
   }
 }
 

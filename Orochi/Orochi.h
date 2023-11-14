@@ -31,6 +31,7 @@ enum oroApi
 	ORO_API_HIP = ORO_API_HIPDRIVER | ORO_API_HIPRTC,
 	ORO_API_CUDADRIVER = 1 << 3,
 	ORO_API_CUDARTC = 1 << 4,
+	ORO_API_CUDART = 1 << 5,
     ORO_API_CUDA = ORO_API_CUDADRIVER | ORO_API_CUDARTC,
 };
 
@@ -148,6 +149,8 @@ typedef struct ioroStream_t* oroStream;
 typedef struct ioroPointerAttribute_t* oroPointerAttribute;
 typedef unsigned long long oroTextureObject;
 typedef struct ioroExternalMemory_t* oroExternalMemory;
+typedef struct ioroMipmappedArray_t* oroMipmappedArray;
+typedef unsigned long long oroSurfaceObject;
 typedef struct ioroExternalSemaphore_t* oroExternalSemaphore;
 typedef struct iorortcLinkState* orortcLinkState;
 typedef struct _orortcProgram* orortcProgram;
@@ -473,6 +476,47 @@ typedef enum PPshared_carveout_enum {
     ORO_SHAREDMEM_CARVEOUT_MAX_L1 = 0,
 } PPshared_carveout;
 
+typedef enum oroResourceType
+{
+    oroResourceTypeArray          = 0x00,
+    oroResourceTypeMipmappedArray = 0x01,
+    oroResourceTypeLinear         = 0x02,
+    oroResourceTypePitch2D        = 0x03,
+} oroResourceType;
+
+typedef enum oroChannelFormatKind {
+    oroChannelFormatKindSigned                         =   0,
+    oroChannelFormatKindUnsigned                       =   1,
+    oroChannelFormatKindFloat                          =   2,
+    oroChannelFormatKindNone                           =   3,
+    oroChannelFormatKindNV12                           =   4,
+    oroChannelFormatKindUnsignedNormalized8X1          =   5,
+    oroChannelFormatKindUnsignedNormalized8X2          =   6,
+    oroChannelFormatKindUnsignedNormalized8X4          =   7,
+    oroChannelFormatKindUnsignedNormalized16X1         =   8,
+    oroChannelFormatKindUnsignedNormalized16X2         =   9,
+    oroChannelFormatKindUnsignedNormalized16X4         =   10,
+    oroChannelFormatKindSignedNormalized8X1            =   11,
+    oroChannelFormatKindSignedNormalized8X2            =   12,
+    oroChannelFormatKindSignedNormalized8X4            =   13,
+    oroChannelFormatKindSignedNormalized16X1           =   14,
+    oroChannelFormatKindSignedNormalized16X2           =   15,
+    oroChannelFormatKindSignedNormalized16X4           =   16,
+    oroChannelFormatKindUnsignedBlockCompressed1       =   17,
+    oroChannelFormatKindUnsignedBlockCompressed1SRGB   =   18,
+    oroChannelFormatKindUnsignedBlockCompressed2       =   19,
+    oroChannelFormatKindUnsignedBlockCompressed2SRGB   =   20,
+    oroChannelFormatKindUnsignedBlockCompressed3       =   21,
+    oroChannelFormatKindUnsignedBlockCompressed3SRGB   =   22,
+    oroChannelFormatKindUnsignedBlockCompressed4       =   23,
+    oroChannelFormatKindSignedBlockCompressed4         =   24,
+    oroChannelFormatKindUnsignedBlockCompressed5       =   25,
+    oroChannelFormatKindSignedBlockCompressed5         =   26,
+    oroChannelFormatKindUnsignedBlockCompressed6H      =   27,
+    oroChannelFormatKindSignedBlockCompressed6H        =   28,
+    oroChannelFormatKindUnsignedBlockCompressed7       =   29,
+    oroChannelFormatKindUnsignedBlockCompressed7SRGB   =   30,
+} oroChannelFormatKind;
 
 
 typedef enum oroComputeMode {
@@ -593,6 +637,57 @@ typedef struct oroExternalMemoryHandleDesc_st {
   unsigned int flags;
   unsigned int reserved[16];
 } oroExternalMemoryHandleDesc;
+
+typedef struct oroExtent_st
+{
+  size_t width;
+  size_t height;
+  size_t depth;
+}oroExtent;
+
+typedef struct oroChannelFormatDesc_st
+{
+  int                        x;
+  int                        y;
+  int                        z;
+  int                        w;
+  enum oroChannelFormatKind  f;
+}oroChannelFormatDesc;
+
+typedef struct oroExternalMemoryMipmappedArrayDesc_st {
+    unsigned long long offset;
+    oroChannelFormatDesc formatDesc;
+    oroExtent extent;
+    unsigned int flags;
+    unsigned int numLevels;
+}oroExternalMemoryMipmappedArrayDesc;
+
+typedef struct oroResourceDesc_st {
+    enum oroResourceType resType;
+    
+    union {
+        struct {
+            oroArray array;
+        } array;
+        struct {
+            oroMipmappedArray mipmap;
+        } mipmap;
+        struct {
+            void *devPtr;
+            struct oroChannelFormatDesc_st desc;
+            size_t sizeInBytes;
+        } linear;
+        struct {
+            void *devPtr;
+            struct oroChannelFormatDesc_st desc;
+            size_t width;
+            size_t height;
+            size_t pitchInBytes;
+        } pitch2D;
+    } res;
+}oroResourceDesc;
+
+
 typedef struct oroExternalMemoryBufferDesc_st {
   unsigned long long offset;
   unsigned long long size;
@@ -788,6 +883,9 @@ oroError OROAPI oroModuleOccupancyMaxPotentialBlockSize(int* minGridSize, int* b
 //oroError OROAPI oroGraphicsGLRegisterBuffer(hipGraphicsResource* pCudaResource, GLuint buffer, unsigned int Flags);
 //oroError OROAPI oroGLGetDevices(unsigned int* pHipDeviceCount, int* pHipDevices, unsigned int hipDeviceCount, hipGLDeviceList deviceList);
 oroError OROAPI oroImportExternalMemory(oroExternalMemory* extMem_out, const oroExternalMemoryHandleDesc* memHandleDesc);
+oroError OROAPI oroExternalMemoryGetMappedMipmappedArray(oroMipmappedArray* mipmap, oroExternalMemory extMem, const oroExternalMemoryMipmappedArrayDesc* mipmapDesc);
+oroError OROAPI oroGetMipmappedArrayLevel(oroArray* levelArray, oroMipmappedArray mipmappedArray, unsigned int level);
+oroError OROAPI oroCreateSurfaceObject(oroSurfaceObject* pSurfObject, const oroResourceDesc* pResDesc);
 oroError OROAPI oroExternalMemoryGetMappedBuffer(oroDeviceptr *devPtr, oroExternalMemory extMem, const oroExternalMemoryBufferDesc* bufferDesc);
 oroError OROAPI oroDestroyExternalMemory(oroExternalMemory extMem);
 oroError OROAPI oroImportExternalSemaphore(oroExternalSemaphore* extSem_out, const oroExternalSemaphoreHandleDesc* semHandleDesc);

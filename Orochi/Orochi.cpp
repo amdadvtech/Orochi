@@ -93,6 +93,10 @@ int oroInitialize( oroApi api, oroU32 flags )
 		{
 			flag |= CUEW_INIT_NVRTC;
 		}
+		if( api & ORO_API_CUDART )
+		{
+			flag |= CUEW_INIT_CUDART;
+		}
 		
 		int resultDriver, resultRtc;
 		cuewInit( &resultDriver, &resultRtc, flag );
@@ -720,6 +724,37 @@ oroError OROAPI oroImportExternalMemory(oroExternalMemory* extMem_out, const oro
 		ImportExternalMemory( (hipExternalMemory_t*)extMem_out, (const hipExternalMemoryHandleDesc*)memHandleDesc ) );
 	return oroErrorUnknown;
 }
+
+//-------------------
+oroError OROAPI oroExternalMemoryGetMappedMipmappedArray(
+		oroMipmappedArray *mipmap, 
+		oroExternalMemory extMem, 
+		const oroExternalMemoryMipmappedArrayDesc *mipmapDesc)
+{
+	__ORO_FUNC1( 
+		ExternalMemoryGetMappedMipmappedArray(  (CUmipmappedArray*) mipmap, (CUexternalMemory) extMem, ( const CUDA_EXTERNAL_MEMORY_MIPMAPPED_ARRAY_DESC * ) mipmapDesc   ),
+		ExternalMemoryGetMappedMipmappedArray(  (hipMipmappedArray_t*) mipmap, extMem, ( const hipExternalMemoryMipmappedArrayDesc * ) mipmapDesc  ) );
+	return oroErrorUnknown;
+}
+
+//-------------------
+oroError OROAPI oroGetMipmappedArrayLevel(oroArray *levelArray, oroMipmappedArray mipmappedArray, unsigned int level)
+{
+	__ORO_FUNC1( 
+		GetMipmappedArrayLevel( (CUarray *) levelArray , (CUmipmappedArray) mipmappedArray , level  ),
+		GetMipmappedArrayLevel( (hipArray *) levelArray , (hipMipmappedArray_t) mipmappedArray , level  ) );
+	return oroErrorUnknown;
+}
+
+//-------------------
+oroError OROAPI oroCreateSurfaceObject(oroSurfaceObject *pSurfObject, const oroResourceDesc *pResDesc)
+{
+	__ORO_FUNC1( 
+		CreateSurfaceObject( (CUsurfaceObject *) pSurfObject , ( const CUDA_RESOURCE_DESC *) pResDesc  ),
+		CreateSurfaceObject(  (hipSurfaceObject_t *) pSurfObject , (const hipResourceDesc *) pResDesc  ) );
+	return oroErrorUnknown;
+}
+
 //-------------------
 oroError OROAPI oroImportExternalSemaphore(oroExternalSemaphore* extSem_out, const oroExternalSemaphoreHandleDesc* semHandleDesc)
 {

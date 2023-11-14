@@ -156,6 +156,7 @@ typedef unsigned long long CUtexObject;
 typedef unsigned long long CUsurfObject;
 typedef struct CUextMemory_st *CUexternalMemory;
 typedef struct CUexternalSemaphore_st* CUexternalSemaphore;
+typedef unsigned long long CUsurfaceObject;
 
 typedef struct CUuuid_st {
   char bytes[16];
@@ -1516,6 +1517,16 @@ typedef CUresult CUDAAPI tcuEventSynchronize(CUevent hEvent);
 typedef CUresult CUDAAPI tcuEventDestroy_v2(CUevent hEvent);
 typedef CUresult CUDAAPI tcuEventElapsedTime(float *pMilliseconds, CUevent hStart, CUevent hEnd);
 typedef CUresult CUDAAPI tcuImportExternalMemory(CUexternalMemory *extMem_out, const CUDA_EXTERNAL_MEMORY_HANDLE_DESC *memHandleDesc);
+typedef CUresult CUDAAPI tcuExternalMemoryGetMappedMipmappedArray(CUmipmappedArray *  mipmap, 
+                                                                CUexternalMemory extMem, 
+                                                                const CUDA_EXTERNAL_MEMORY_MIPMAPPED_ARRAY_DESC *  mipmapDesc
+                                                                );
+typedef CUresult CUDAAPI tcuCreateSurfaceObject(CUsurfaceObject *pSurfObject, 
+                                                const CUDA_RESOURCE_DESC *pResDesc
+                                                );
+typedef CUresult CUDAAPI tcuGetMipmappedArrayLevel(CUarray *levelArray, 
+                                                    CUmipmappedArray mipmappedArray, 
+                                                    unsigned int level);
 typedef CUresult CUDAAPI tcuImportExternalSemaphore(CUexternalSemaphore* extSem_out, const CUDA_EXTERNAL_SEMAPHORE_HANDLE_DESC* semHandleDesc);
 typedef CUresult CUDAAPI tcuExternalMemoryGetMappedBuffer(CUdeviceptr *devPtr, CUexternalMemory extMem, const CUDA_EXTERNAL_MEMORY_BUFFER_DESC *bufferDesc);
 typedef CUresult CUDAAPI tcuDestroyExternalMemory(CUexternalMemory extMem);
@@ -1893,6 +1904,12 @@ extern tcuEventSynchronize *cuEventSynchronize;
 extern tcuEventDestroy_v2 *cuEventDestroy_v2;
 extern tcuEventElapsedTime *cuEventElapsedTime;
 extern tcuImportExternalMemory *cuImportExternalMemory;
+extern tcuExternalMemoryGetMappedMipmappedArray *cuExternalMemoryGetMappedMipmappedArray;
+extern tcuGetMipmappedArrayLevel *cuGetMipmappedArrayLevel;
+extern tcuCreateSurfaceObject *cuCreateSurfaceObject;
+extern tcuExternalMemoryGetMappedMipmappedArray *cuExternalMemoryGetMappedMipmappedArray;
+extern tcuGetMipmappedArrayLevel *cuGetMipmappedArrayLevel;
+extern tcuCreateSurfaceObject *cuCreateSurfaceObject;
 extern tcuImportExternalSemaphore* cuImportExternalSemaphore;
 extern tcuExternalMemoryGetMappedBuffer *cuExternalMemoryGetMappedBuffer;
 extern tcuDestroyExternalMemory *cuDestroyExternalMemory;
@@ -2010,7 +2027,7 @@ enum {
   CUEW_NOT_INITIALIZED = -3,
 };
 
-enum { CUEW_INIT_CUDA = 1, CUEW_INIT_NVRTC = 2 };
+enum { CUEW_INIT_CUDA = 1, CUEW_INIT_NVRTC = 2, CUEW_INIT_CUDART = 4 };
 
 void cuewInit( int* resultDriver, int* resultRtc, cuuint32_t flags );
 const char *cuewErrorString(CUresult result);

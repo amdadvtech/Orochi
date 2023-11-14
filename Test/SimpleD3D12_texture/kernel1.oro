@@ -1,0 +1,52 @@
+
+
+
+extern "C" __global__ void UpdateSurface(
+	hipSurfaceObject_t surf, // on CUDA, cudaSurfaceObject_t must be used.
+	unsigned int width, 
+	unsigned int height, 
+	float time
+	)
+{
+	unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+	unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+	if (y >= height | x >= width) return;
+
+	float xVar = (float)x / (float)width;
+	float yVar = (float)y / (float)height;
+
+	float4 pixel{};
+	
+	// add some debug basic square color
+	if (   x >= 0 && x <= 50
+		&& y >= 0 && y <= 50
+		)
+	{
+		pixel = make_float4(1.0, 0.0, 0.0, 1.0);
+	}
+	else if (   x >= 50 && x <= 100
+		     && y >= 0 && y <= 50
+		)
+	{
+		pixel = make_float4(0.0, 1.0, 0.0, 1.0);
+	}
+	else if (   x >= 100 && x <= 150
+		     && y >= 0 && y <= 50
+		)
+	{
+		pixel = make_float4(0.0, 0.0, 1.0, 1.0);
+	}
+
+	// color the texture with simple animated cos.
+	else
+	{
+		
+		float costx = __cosf(time) * 0.5f + xVar;
+		float costy = __cosf(time*0.3) * 0.5f + yVar;
+		pixel = make_float4(costx, costy, costx, 1.0);
+	}
+
+
+	surf2Dwrite(pixel, surf, x * 16, y);
+}
+
