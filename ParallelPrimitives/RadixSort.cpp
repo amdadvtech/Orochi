@@ -26,6 +26,20 @@ constexpr auto useBitCode = true;
 constexpr auto useBitCode = false;
 #endif
 
+#if defined( ORO_PP_LOAD_FROM_STRING )
+constexpr auto useBakeKernel = true;
+#else
+constexpr auto useBakeKernel = false;
+static const char* hip_RadixSortKernels = nullptr;
+namespace hip
+{
+static const char** RadixSortKernelsArgs = nullptr;
+static const char** RadixSortKernelsIncludes = nullptr;
+} // namespace hip
+#endif
+
+static_assert( !( useBitCode && useBakeKernel ), "useBitCode and useBakeKernel cannot coexist" );
+
 #if !defined( __GNUC__ )
 const HMODULE GetCurrentModule()
 {
@@ -56,26 +70,13 @@ void printKernelInfo( const std::string& name, oroFunction func )
 namespace Oro
 {
 
-RadixSort::RadixSort( oroDevice device, OrochiUtils& oroutils ) : m_device{ device }, m_oroutils{ oroutils }
+RadixSort::RadixSort( oroDevice device, OrochiUtils& oroutils, oroStream stream, const std::string& kernelPath, const std::string& includeDir ) : m_device{ device }, m_oroutils{ oroutils }
 {
 	oroGetDeviceProperties( &m_props, device );
-
-	m_num_threads_per_block_for_count = m_props.maxThreadsPerBlock > 0 ? m_props.maxThreadsPerBlock : DEFAULT_COUNT_BLOCK_SIZE;
-	m_num_threads_per_block_for_scan = m_props.maxThreadsPerBlock > 0 ? m_props.maxThreadsPerBlock : DEFAULT_SCAN_BLOCK_SIZE;
-	m_num_threads_per_block_for_sort = m_props.maxThreadsPerBlock > 0 ? m_props.maxThreadsPerBlock : DEFAULT_SORT_BLOCK_SIZE;
-
-	const auto warp_size = ( m_props.warpSize != 0 ) ? m_props.warpSize : DEFAULT_WARP_SIZE;
-
-	m_num_warps_per_block_for_sort = m_num_threads_per_block_for_sort / warp_size;
-
-	assert( m_num_threads_per_block_for_count % warp_size == 0 );
-	assert( m_num_threads_per_block_for_scan % warp_size == 0 );
-	assert( m_num_threads_per_block_for_sort % warp_size == 0 );
-
-	configure();
+	configure( kernelPath, includeDir, stream );
 }
 
-void RadixSort::exclusiveScanCpu( const Oro::GpuMemory<int>& countsGpu, Oro::GpuMemory<int>& offsetsGpu, oroStream stream ) const noexcept
+void RadixSort::exclusiveScanCpu( const Oro::GpuMemory<int>& countsGpu, Oro::GpuMemory<int>& offsetsGpu ) const noexcept
 {
 	const auto buffer_size = countsGpu.size();
 
@@ -123,29 +124,34 @@ void RadixSort::compileKernels( const std::string& kernelPath, const std::string
 		binaryPath = getCurrentDir();
 		binaryPath += isAmd ? "oro_compiled_kernels.hipfb" : "oro_compiled_kernels.fatbin";
 		log = "loading pre-compiled kernels at path : " + binaryPath;
+
+		m_num_threads_per_block_for_count = DEFAULT_COUNT_BLOCK_SIZE;
+		m_num_threads_per_block_for_scan = DEFAULT_SCAN_BLOCK_SIZE;
+		m_num_threads_per_block_for_sort = DEFAULT_SORT_BLOCK_SIZE;
+
+		m_warp_size = DEFAULT_WARP_SIZE;
 	}
 	else
 	{
 		log = "compiling kernels at path : " + currentKernelPath + " in : " + currentIncludeDir;
+
+		m_num_threads_per_block_for_count = m_props.maxThreadsPerBlock > 0 ? m_props.maxThreadsPerBlock : DEFAULT_COUNT_BLOCK_SIZE;
+		m_num_threads_per_block_for_scan = m_props.maxThreadsPerBlock > 0 ? m_props.maxThreadsPerBlock : DEFAULT_SCAN_BLOCK_SIZE;
+		m_num_threads_per_block_for_sort = m_props.maxThreadsPerBlock > 0 ? m_props.maxThreadsPerBlock : DEFAULT_SORT_BLOCK_SIZE;
+
+		m_warp_size = ( m_props.warpSize != 0 ) ? m_props.warpSize : DEFAULT_WARP_SIZE;
+
+		assert( m_num_threads_per_block_for_count % m_warp_size == 0 );
+		assert( m_num_threads_per_block_for_scan % m_warp_size == 0 );
+		assert( m_num_threads_per_block_for_sort % m_warp_size == 0 );
 	}
+
+	m_num_warps_per_block_for_sort = m_num_threads_per_block_for_sort / m_warp_size;
 
 	if( m_flags == Flag::LOG )
 	{
 		std::cout << log << std::endl;
 	}
-
-	const auto includeArg{ "-I" + currentIncludeDir };
-	const auto count_block_size_param = "-DCOUNT_WG_SIZE=" + std::to_string( m_num_threads_per_block_for_count );
-	const auto scan_block_size_param = "-DSCAN_WG_SIZE=" + std::to_string( m_num_threads_per_block_for_scan );
-	const auto sort_block_size_param = "-DSORT_WG_SIZE=" + std::to_string( m_num_threads_per_block_for_sort );
-	const auto sort_num_warps_param = "-DSORT_NUM_WARPS_PER_BLOCK=" + std::to_string( m_num_warps_per_block_for_sort );
-
-	std::vector<const char*> opts;
-	opts.push_back( includeArg.c_str() );
-	opts.push_back( count_block_size_param.c_str() );
-	opts.push_back( scan_block_size_param.c_str() );
-	opts.push_back( sort_block_size_param.c_str() );
-	opts.push_back( sort_num_warps_param.c_str() );
 
 	struct Record
 	{
@@ -158,13 +164,38 @@ void RadixSort::compileKernels( const std::string& kernelPath, const std::string
 		{ "SortKVKernel", Kernel::SORT_KV }, { "SortSinglePassKernel", Kernel::SORT_SINGLE_PASS },		  { "SortSinglePassKVKernel", Kernel::SORT_SINGLE_PASS_KV },
 	};
 
+	const auto includeArg{ "-I" + currentIncludeDir };
+	const auto overwrite_flag = "-DOVERWRITE";
+	const auto count_block_size_param = "-DCOUNT_WG_SIZE_VAL=" + std::to_string( m_num_threads_per_block_for_count );
+	const auto scan_block_size_param = "-DSCAN_WG_SIZE_VAL=" + std::to_string( m_num_threads_per_block_for_scan );
+	const auto sort_block_size_param = "-DSORT_WG_SIZE_VAL=" + std::to_string( m_num_threads_per_block_for_sort );
+	const auto sort_num_warps_param = "-DSORT_NUM_WARPS_PER_BLOCK_VAL=" + std::to_string( m_num_warps_per_block_for_sort );
+
+	std::vector<const char*> opts;
+
+	if( const std::string device_name = m_props.name; device_name.find( "NVIDIA" ) != std::string::npos )
+	{
+		opts.push_back( "--use_fast_math" );
+	}
+	else
+	{
+		opts.push_back( "-ffast-math" );
+	}
+
+	opts.push_back( includeArg.c_str() );
+	opts.push_back( overwrite_flag );
+	opts.push_back( count_block_size_param.c_str() );
+	opts.push_back( scan_block_size_param.c_str() );
+	opts.push_back( sort_block_size_param.c_str() );
+	opts.push_back( sort_num_warps_param.c_str() );
+
 	for( const auto& record : records )
 	{
-#if defined( ORO_PP_LOAD_FROM_STRING )
-		oroFunctions[record.kernelType] = oroutils.getFunctionFromString( device, hip_RadixSortKernels, currentKernelPath.c_str(), record.kernelName.c_str(), &opts, 1, hip::RadixSortKernelsArgs, hip::RadixSortKernelsIncludes );
-#else
-
-		if constexpr( useBitCode )
+		if constexpr( useBakeKernel )
+		{
+			oroFunctions[record.kernelType] = m_oroutils.getFunctionFromString( m_device, hip_RadixSortKernels, currentKernelPath.c_str(), record.kernelName.c_str(), &opts, 1, hip::RadixSortKernelsArgs, hip::RadixSortKernelsIncludes );
+		}
+		else if constexpr( useBitCode )
 		{
 			oroFunctions[record.kernelType] = m_oroutils.getFunctionFromPrecompiledBinary( binaryPath.c_str(), record.kernelName.c_str() );
 		}
@@ -173,7 +204,6 @@ void RadixSort::compileKernels( const std::string& kernelPath, const std::string
 			oroFunctions[record.kernelType] = m_oroutils.getFunctionFromFile( m_device, currentKernelPath.c_str(), record.kernelName.c_str(), &opts );
 		}
 
-#endif
 		if( m_flags == Flag::LOG )
 		{
 			printKernelInfo( record.kernelName, oroFunctions[record.kernelType] );
@@ -183,9 +213,8 @@ void RadixSort::compileKernels( const std::string& kernelPath, const std::string
 
 int RadixSort::calculateWGsToExecute( const int blockSize ) const noexcept
 {
-	const int warpSize = ( m_props.warpSize != 0 ) ? m_props.warpSize : DEFAULT_WARP_SIZE;
-	const int warpPerWG = blockSize / warpSize;
-	const int warpPerWGP = m_props.maxThreadsPerMultiProcessor / warpSize;
+	const int warpPerWG = blockSize / m_warp_size;
+	const int warpPerWGP = m_props.maxThreadsPerMultiProcessor / m_warp_size;
 	const int occupancyFromWarp = ( warpPerWGP > 0 ) ? ( warpPerWGP / warpPerWG ) : 1;
 
 	const int occupancy = std::max( 1, occupancyFromWarp );
@@ -225,13 +254,14 @@ void RadixSort::configure( const std::string& kernelPath, const std::string& inc
 
 	m_num_blocks_for_scan = tmp_buffer_size / m_num_threads_per_block_for_scan;
 
-	m_tmp_buffer.resize( tmp_buffer_size );
+	m_tmp_buffer.resizeAsync( tmp_buffer_size, false, stream );
 
 	if( selectedScanAlgo == ScanAlgo::SCAN_GPU_PARALLEL )
 	{
 		// These are for the scan kernel
-		m_partial_sum.resize( m_num_blocks_for_scan );
-		m_is_ready.resize( m_num_blocks_for_scan );
+		m_partial_sum.resizeAsync( m_num_blocks_for_scan, false, stream );
+		m_is_ready.resizeAsync( m_num_blocks_for_scan, false, stream );
+		m_is_ready.resetAsync( stream );
 	}
 }
 void RadixSort::setFlag( Flag flag ) noexcept { m_flags = flag; }

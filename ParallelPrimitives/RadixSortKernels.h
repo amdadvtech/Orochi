@@ -14,6 +14,30 @@ using u64 = unsigned long long;
 
 // #define NV_WORKAROUND 1
 
+// default values
+#if defined( OVERWRITE )
+
+constexpr auto COUNT_WG_SIZE{ COUNT_WG_SIZE_VAL };
+constexpr auto SCAN_WG_SIZE{ SCAN_WG_SIZE_VAL };
+constexpr auto SORT_WG_SIZE{ SORT_WG_SIZE_VAL };
+constexpr auto SORT_NUM_WARPS_PER_BLOCK{ SORT_NUM_WARPS_PER_BLOCK_VAL };
+
+#else
+
+constexpr auto COUNT_WG_SIZE{ DEFAULT_COUNT_BLOCK_SIZE };
+constexpr auto SCAN_WG_SIZE{ DEFAULT_SCAN_BLOCK_SIZE };
+constexpr auto SORT_WG_SIZE{ DEFAULT_SORT_BLOCK_SIZE };
+constexpr auto SORT_NUM_WARPS_PER_BLOCK{ DEFAULT_NUM_WARPS_PER_BLOCK };
+
+#endif
+
+#if defined( __CUDACC__ )
+constexpr int SORT_SUBBLOCK_SIZE = 2048;
+#else
+constexpr int SORT_SUBBLOCK_SIZE = 4096;
+#endif
+
+
 __device__ constexpr u32 getMaskedBits( const u32 value, const u32 shift ) noexcept { return ( value >> shift ) & RADIX_MASK; }
 
 extern "C" __global__ void CountKernel( int* gSrc, int* gDst, int gN, int gNItemsPerWG, const int START_BIT, const int N_WGS_EXECUTED )
@@ -618,19 +642,27 @@ extern "C" __global__ void ParallelExclusiveScanAllWG( int* gCount, int* gHistog
 template<bool KEY_VALUE_PAIR>
 __device__ void SortImpl( int* gSrcKey, int* gSrcVal, int* gDstKey, int* gDstVal, int* gHistogram, int numberOfInputs, int gNItemsPerWG, const int START_BIT, const int N_WGS_EXECUTED )
 {
+	const int startOffset = blockIdx.x * gNItemsPerWG;
+	const int nItemInBlock = ( startOffset + gNItemsPerWG > numberOfInputs ) ? numberOfInputs - startOffset : gNItemsPerWG;
+
+	struct ElementLocation
+	{
+		u32 localSrcIndex : 12;
+		u32 localOffset : 12;
+		u32 bucket : 8;
+	};
+
 	__shared__ u32 globalOffset[BIN_SIZE];
 	__shared__ u32 localPrefixSum[BIN_SIZE];
 	__shared__ u32 counters[BIN_SIZE];
-
 	__shared__ u32 matchMasks[SORT_NUM_WARPS_PER_BLOCK][BIN_SIZE];
+	__shared__ u8 elementBuckets[SORT_SUBBLOCK_SIZE];
+	__shared__ ElementLocation elementLocations[SORT_SUBBLOCK_SIZE];
 
 	for( int i = threadIdx.x; i < BIN_SIZE; i += SORT_WG_SIZE )
 	{
 		// Note: The size of gHistogram is always BIN_SIZE * N_WGS_EXECUTED
 		globalOffset[i] = gHistogram[i * N_WGS_EXECUTED + blockIdx.x];
-
-		counters[i] = 0;
-		localPrefixSum[i] = 0;
 	}
 
 	for( int w = 0; w < SORT_NUM_WARPS_PER_BLOCK; ++w )
@@ -643,93 +675,115 @@ __device__ void SortImpl( int* gSrcKey, int* gSrcVal, int* gDstKey, int* gDstVal
 
 	__syncthreads();
 
-	for( int i = threadIdx.x; i < gNItemsPerWG; i += SORT_WG_SIZE )
+	for( int j = 0; j < nItemInBlock; j += SORT_SUBBLOCK_SIZE )
 	{
-		const u32 itemIndex = blockIdx.x * gNItemsPerWG + i;
-		if( itemIndex < numberOfInputs )
+		for( int i = threadIdx.x; i < BIN_SIZE; i += SORT_WG_SIZE )
 		{
-			const auto item = gSrcKey[itemIndex];
-			const u32 bucketIndex = getMaskedBits( item, START_BIT );
-			atomicInc( &localPrefixSum[bucketIndex], 0xFFFFFFFF );
+			counters[i] = 0;
+			localPrefixSum[i] = 0;
 		}
-	}
-
-	__syncthreads();
-
-	// Compute Prefix Sum
-
-	ldsScanExclusive( localPrefixSum, BIN_SIZE );
-
-	__syncthreads();
-
-	// Reorder
-
-	for( int i = threadIdx.x; i < gNItemsPerWG; i += SORT_WG_SIZE )
-	{
-		const u32 itemIndex = blockIdx.x * gNItemsPerWG + i;
-
-		const auto item = gSrcKey[itemIndex];
-		const u32 bucketIndex = getMaskedBits( item, START_BIT );
-
-		const int warp = threadIdx.x / 32;
-		const int lane = threadIdx.x % 32;
-
 		__syncthreads();
 
-		if( itemIndex < numberOfInputs )
+		for( int i = 0; i < SORT_SUBBLOCK_SIZE; i += SORT_WG_SIZE )
 		{
-			atomicOr( &matchMasks[warp][bucketIndex], 1u << lane );
-		}
-
-		__syncthreads();
-
-		bool flushMask = false;
-
-		u32 localOffset = 0;
-		u32 localSrcIndex = 0;
-
-		if( itemIndex < numberOfInputs )
-		{
-			const u32 matchMask = matchMasks[warp][bucketIndex];
-			const u32 lowerMask = ( 1u << lane ) - 1;
-			u32 offset = __popc( matchMask & lowerMask );
-
-			flushMask = ( offset == 0 );
-
-			for( int w = 0; w < warp; ++w )
+			const auto itemIndex = blockIdx.x * gNItemsPerWG + j + i + threadIdx.x;
+			if( itemIndex < numberOfInputs )
 			{
-				offset += __popc( matchMasks[w][bucketIndex] );
-			}
-
-			localOffset = counters[bucketIndex] + offset;
-			localSrcIndex = i;
-		}
-
-		__syncthreads();
-
-		if( itemIndex < numberOfInputs )
-		{
-			atomicInc( &counters[bucketIndex], 0xFFFFFFFF );
-		}
-
-		if( flushMask )
-		{
-			matchMasks[warp][bucketIndex] = 0;
-		}
-
-		// Swap
-
-		if( itemIndex < numberOfInputs )
-		{
-			const u32 srcIndex = blockIdx.x * gNItemsPerWG + localSrcIndex;
-			const u32 dstIndex = globalOffset[bucketIndex] + localOffset;
-			gDstKey[dstIndex] = gSrcKey[srcIndex];
-
-			if constexpr( KEY_VALUE_PAIR )
-			{
-				gDstVal[dstIndex] = gSrcVal[srcIndex];
+				const auto item = gSrcKey[itemIndex];
+				const u32 bucketIndex = getMaskedBits( item, START_BIT );
+				atomicInc( &localPrefixSum[bucketIndex], 0xFFFFFFFF );
+				elementBuckets[i + threadIdx.x] = static_cast<u8>(bucketIndex);
 			}
 		}
+
+		__syncthreads();
+
+		ldsScanExclusive( localPrefixSum, BIN_SIZE );
+
+		__syncthreads();
+
+		for( int i = 0; i < SORT_SUBBLOCK_SIZE; i += SORT_WG_SIZE )
+		{
+			const auto itemIndex = blockIdx.x * gNItemsPerWG + j + i + threadIdx.x;
+			const u32 bucketIndex = elementBuckets[i + threadIdx.x];
+
+			const int warp = threadIdx.x / 32;
+			const int lane = threadIdx.x % 32;
+
+			__syncthreads();
+
+			if( itemIndex < numberOfInputs )
+			{
+				atomicOr( &matchMasks[warp][bucketIndex], 1u << lane );
+			}
+
+			__syncthreads();
+
+			bool flushMask = false;
+
+			if( itemIndex < numberOfInputs )
+			{
+				const u32 matchMask = matchMasks[warp][bucketIndex];
+				const u32 lowerMask = ( 1u << lane ) - 1;
+				u32 offset = __popc( matchMask & lowerMask );
+
+				flushMask = ( offset == 0 );
+
+				for( int w = 0; w < warp; ++w )
+				{
+					offset += __popc( matchMasks[w][bucketIndex] );
+				}
+
+				const u32 localOffset = counters[bucketIndex] + offset;
+				const u32 to = localOffset + localPrefixSum[bucketIndex];
+
+				ElementLocation el;
+				el.localSrcIndex = i + threadIdx.x;
+				el.localOffset = localOffset;
+				el.bucket = bucketIndex;
+				elementLocations[to] = el;
+			}
+
+			__syncthreads();
+
+			if( itemIndex < numberOfInputs )
+			{
+				atomicInc( &counters[bucketIndex], 0xFFFFFFFF );
+			}
+
+			if( flushMask )
+			{
+				matchMasks[warp][bucketIndex] = 0;
+			}
+		}
+
+		for( int i = 0; i < SORT_SUBBLOCK_SIZE; i += SORT_WG_SIZE )
+		{
+			const int itemIndex = blockIdx.x * gNItemsPerWG + j + i + threadIdx.x;
+			if( itemIndex < numberOfInputs )
+			{
+				const auto el = elementLocations[i + threadIdx.x];
+				const auto srcIndex = blockIdx.x * gNItemsPerWG + j + el.localSrcIndex;
+				const auto bucketIndex = el.bucket;
+
+				const auto dstIndex = globalOffset[bucketIndex] + el.localOffset;
+				gDstKey[dstIndex] = gSrcKey[srcIndex];
+
+				if constexpr( KEY_VALUE_PAIR )
+				{
+					gDstVal[dstIndex] = gSrcVal[srcIndex];
+				}
+			}
+		}
+
+		__syncthreads();
+
+		for( int i = threadIdx.x; i < BIN_SIZE; i += SORT_WG_SIZE )
+		{
+			globalOffset[i] += counters[i];
+		}
+
+		__syncthreads();
 	}
 }
 
