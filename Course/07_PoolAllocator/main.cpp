@@ -17,8 +17,7 @@ class PoolAllocatorSample : public Sample
 		CHECK_ORO( oroGetDeviceProperties( &prop, m_device ) );
 
 		// Determine how many stack to allocate (for active threads)
-		//u32 stackCount = prop.multiProcessorCount * prop.maxThreadsPerMultiProcessor;
-		u32 stackCount = prop.multiProcessorCount * 64;
+		u32 stackCount = prop.multiProcessorCount * prop.maxThreadsPerMultiProcessor;
 		
 		// The stack size
 		u32 stackSize = 128u;
