@@ -111,6 +111,9 @@ namespace Oro
 
 		/// @brief Reset the memory space so that all bits inside are cleared to zero.
 		void reset() noexcept { OrochiUtils::memset(m_data, 0, m_size * sizeof(T)); }
+		
+		void reset(int val) noexcept { OrochiUtils::memset(m_data, val, m_size * sizeof(T)); }
+
 		void resetAsync(oroStream stream = 0) noexcept { OrochiUtils::memsetAsync(m_data, 0, m_size * sizeof(T), stream); }
 
 		/// @brief Copy the data from device memory to host.
