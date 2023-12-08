@@ -20,7 +20,7 @@ extern "C" __global__ void BuildTree( u32 size, int* input, int* taskQueue, int*
 		// Skip threads that are out-of-bound
 		if( index >= size - 1 ) continue;
 
-		// Taks queue contains node indices to the input node buffer
+		// Task queue contains node indices to the input node buffer
 		// Initially, the task queue contains only '1' in the first entry
 		// Other entries are zero indicating that they are not valid tasks
 		int task = taskQueue[index];
