@@ -108,4 +108,5 @@ workspace "YamatanoOrochi"
         group "Advanced"
         include "./Test/VulkanComputeSimple"
         include "./Test/RadixSort"
+        include "./Test/simpleD3D12"
      end

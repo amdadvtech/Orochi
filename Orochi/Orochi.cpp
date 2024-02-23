@@ -192,6 +192,11 @@ oroError cu2oro( CUresult a )
 	return (oroError)a;
 }
 inline
+oroError cuda2oro(cudaError_t a)
+{
+	return (oroError)a;
+}
+inline
 CUcontext* oroCtx2cu( oroCtx* a )
 {
 	ioroCtx_t* b = *a;
@@ -219,7 +224,8 @@ inline orortcResult cu2orortc( CUresult a ) { return (orortcResult)a; }
 
 #define __ORO_FUNC1( cuname, hipname ) if( s_api & ORO_API_CUDADRIVER ) return cu2oro( cu##cuname ); if( s_api == ORO_API_HIP ) return hip2oro( hip##hipname );
 #define __ORO_FUNC1X( API, cuname, hipname ) if( API & ORO_API_CUDADRIVER ) return cu2oro( cu##cuname ); if( API == ORO_API_HIP ) return hip2oro( hip##hipname );
-//#define __ORO_FUNC2( cudaname, hipname ) if( s_api == ORO_API_CUDA ) return cuda2oro( cuda##cudaname ); if( s_api == ORO_API_HIP ) return hip2oro( hip##hipname );
+//#define __ORO_FUNC2( cudaname, hipname ) if( s_api & ORO_API_CUDA ) return cuda2oro( cuda##cudaname ); if( s_api == ORO_API_HIP ) return hip2oro( hip##hipname );
+#define __ORO_FUNC3( name ) if( s_api & ORO_API_CUDA ) return cuda2oro( cuda##name ); if( s_api == ORO_API_HIP ) return hip2oro( hip##name );
 //#define __ORO_FUNC1( cuname, hipname ) if( s_api == ORO_API_CUDA || API == ORO_API_CUDA ) return cu2oro( cu##cuname ); if( s_api == API_HIP || API == API_HIP ) return hip2oro( hip##hipname );
 #define __ORO_FUNC( name ) if( s_api & ORO_API_CUDADRIVER ) return cu2oro( cu##name ); if( s_api == ORO_API_HIP ) return hip2oro( hip##name );
 #define __ORO_FUNCX( API, name ) if( API & ORO_API_CUDADRIVER ) return cu2oro( cu##name ); if( API == ORO_API_HIP ) return hip2oro( hip##name );
@@ -269,9 +275,21 @@ oroError OROAPI oroDriverGetVersion(int* driverVersion)
 	return oroErrorUnknown;
 }
 
-oroError OROAPI oroGetDevice(int* device)
+oroError OROAPI oroCtxGetDevice(int* device)
 {
 	__ORO_CTXT_FUNC( GetDevice(device) );
+	return oroErrorUnknown;
+}
+
+oroError OROAPI oroGetDevice(int* device)
+{
+	__ORO_FUNC3(GetDevice(device));
+	return oroErrorUnknown;
+}
+
+oroError OROAPI oroSetDevice(int device)
+{
+	__ORO_FUNC3(SetDevice(device));
 	return oroErrorUnknown;
 }
 
@@ -307,6 +325,7 @@ oroError OROAPI oroGetDeviceProperties(oroDeviceProp* props, oroDevice dev)
 	ioroDevice d( dev );
 	int deviceId = d.getDevice();
 	oroApi api = d.getApi();
+	*props = {};
 	if( api == ORO_API_HIP )
 		return hip2oro(hipGetDeviceProperties((hipDeviceProp_t*)props, deviceId));
 	if( api & ORO_API_CUDADRIVER )
@@ -327,9 +346,10 @@ oroError OROAPI oroGetDeviceProperties(oroDeviceProp* props, oroDevice dev)
 		cu2oro( cuDeviceTotalMem( &props->totalGlobalMem, deviceId ) );
 
 		e = cuDeviceGetAttribute( &props->pciDomainID, CU_DEVICE_ATTRIBUTE_PCI_DOMAIN_ID, deviceId );
-		e = cuDeviceGetAttribute(&props->pciBusID, CU_DEVICE_ATTRIBUTE_PCI_BUS_ID, deviceId);
-		e = cuDeviceGetAttribute(&props->pciDeviceID, CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID, deviceId);
-		e = cuDeviceGetAttribute(&props->multiProcessorCount, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, deviceId);
+		e = cuDeviceGetAttribute( &props->pciBusID, CU_DEVICE_ATTRIBUTE_PCI_BUS_ID, deviceId );
+		e = cuDeviceGetAttribute( &props->pciDeviceID, CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID, deviceId );
+		e = cuDeviceGetAttribute( &props->multiProcessorCount, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, deviceId );
+		e = cuDeviceGetAttribute( &props->maxThreadsPerMultiProcessor, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR, deviceId );
 		e = cuDeviceGetAttribute( &props->warpSize, CU_DEVICE_ATTRIBUTE_WARP_SIZE, deviceId );
 		e = cuDeviceGetAttribute( (int*)&props->textureAlignment, CU_DEVICE_ATTRIBUTE_TEXTURE_ALIGNMENT, deviceId );
 		e = cuDeviceGetAttribute( &props->kernelExecTimeoutEnabled, CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT, deviceId );
@@ -714,26 +734,55 @@ oroError OROAPI oroModuleOccupancyMaxPotentialBlockSize( int* minGridSize, int* 
 }
 
 //-------------------
-oroError OROAPI oroImportExternalMemory(oroExternalMemory_t* extMem_out, const oroExternalMemoryHandleDesc* memHandleDesc)
+oroError OROAPI oroImportExternalMemory(oroExternalMemory* extMem_out, const oroExternalMemoryHandleDesc* memHandleDesc)
 {
 	__ORO_FUNC1( ImportExternalMemory( (CUexternalMemory*)extMem_out, (const CUDA_EXTERNAL_MEMORY_HANDLE_DESC*)memHandleDesc ),
 		ImportExternalMemory( (hipExternalMemory_t*)extMem_out, (const hipExternalMemoryHandleDesc*)memHandleDesc ) );
 	return oroErrorUnknown;
 }
 //-------------------
-oroError OROAPI oroExternalMemoryGetMappedBuffer(void **devPtr, oroExternalMemory_t extMem, const oroExternalMemoryBufferDesc* bufferDesc)
+oroError OROAPI oroImportExternalSemaphore(oroExternalSemaphore* extSem_out, const oroExternalSemaphoreHandleDesc* semHandleDesc)
 {
-	__ORO_FUNC1( ExternalMemoryGetMappedBuffer( (CUdeviceptr*)devPtr, (CUexternalMemory)extMem, (const CUDA_EXTERNAL_MEMORY_BUFFER_DESC*)bufferDesc ),
-		ExternalMemoryGetMappedBuffer( devPtr, (hipExternalMemory_t)extMem, (const hipExternalMemoryBufferDesc*)bufferDesc ) );
+	__ORO_FUNC1(ImportExternalSemaphore((CUexternalSemaphore*)extSem_out, (const CUDA_EXTERNAL_SEMAPHORE_HANDLE_DESC*)semHandleDesc),
+		ImportExternalSemaphore((hipExternalSemaphore_t*)extSem_out, (const hipExternalSemaphoreHandleDesc*)semHandleDesc));
 	return oroErrorUnknown;
 }
 //-------------------
-oroError OROAPI oroDestroyExternalMemory(oroExternalMemory_t extMem)
+oroError OROAPI oroExternalMemoryGetMappedBuffer(oroDeviceptr* devPtr, oroExternalMemory extMem, const oroExternalMemoryBufferDesc* bufferDesc)
+{
+	__ORO_FUNC1( ExternalMemoryGetMappedBuffer( (CUdeviceptr*)devPtr, (CUexternalMemory)extMem, (const CUDA_EXTERNAL_MEMORY_BUFFER_DESC*)bufferDesc ),
+		ExternalMemoryGetMappedBuffer( (void**)devPtr, (hipExternalMemory_t)extMem, (const hipExternalMemoryBufferDesc*)bufferDesc ) );
+	return oroErrorUnknown;
+}
+//-------------------
+oroError OROAPI oroDestroyExternalMemory(oroExternalMemory extMem)
 {
 	__ORO_FUNC1( DestroyExternalMemory( (CUexternalMemory)extMem ),
 		DestroyExternalMemory( (hipExternalMemory_t)extMem ) );
 	return oroErrorUnknown;
 }
+//-------------------
+oroError OROAPI oroDestroyExternalSemaphore(oroExternalSemaphore extSem)
+{
+	__ORO_FUNC1(DestroyExternalSemaphore((CUexternalSemaphore)extSem),
+		DestroyExternalSemaphore((hipExternalSemaphore_t)extSem));
+	return oroErrorUnknown;
+}
+//-------------------
+oroError OROAPI oroWaitExternalSemaphoresAsync(const oroExternalSemaphore* extSemArray, const oroExternalSemaphoreWaitParams* paramsArray, unsigned int numExtSems, oroStream stream)
+{
+	__ORO_FUNC1(WaitExternalSemaphoresAsync((CUexternalSemaphore*)extSemArray, (const CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS*)paramsArray, numExtSems, (CUstream)stream),
+		WaitExternalSemaphoresAsync((hipExternalSemaphore_t*)extSemArray, (const hipExternalSemaphoreWaitParams*)paramsArray, numExtSems, (hipStream_t)stream));
+	return oroErrorUnknown;
+}
+//-------------------
+oroError OROAPI oroSignalExternalSemaphoresAsync(const oroExternalSemaphore* extSemArray, const oroExternalSemaphoreSignalParams* paramsArray, unsigned int numExtSems, oroStream stream)
+{
+	__ORO_FUNC1(SignalExternalSemaphoresAsync((CUexternalSemaphore*)extSemArray, (const CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS*)paramsArray, numExtSems, (CUstream)stream),
+		SignalExternalSemaphoresAsync((hipExternalSemaphore_t*)extSemArray, (const hipExternalSemaphoreSignalParams*)paramsArray, numExtSems, (hipStream_t)stream));
+	return oroErrorUnknown;
+}
+
 /* oroError OROAPI oroGetLastError(oroError oro_error)
 {
 	__ORO_FUNC2(GetLastError((cudaError_t)oro_error),

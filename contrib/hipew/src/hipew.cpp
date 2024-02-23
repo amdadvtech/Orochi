@@ -76,6 +76,7 @@ thipGetLastError *hipGetLastError;
 thipInit *hipInit;
 thipDriverGetVersion *hipDriverGetVersion;
 thipGetDevice *hipGetDevice;
+thipSetDevice* hipSetDevice;
 thipGetDeviceCount *hipGetDeviceCount;
 thipGetDeviceProperties *hipGetDeviceProperties;
 thipDeviceGet* hipDeviceGet;
@@ -196,8 +197,12 @@ thipGraphicsResourceGetMappedPointer *hipGraphicsResourceGetMappedPointer;
 thipGraphicsGLRegisterBuffer *hipGraphicsGLRegisterBuffer;
 thipGLGetDevices *hipGLGetDevices;
 thipImportExternalMemory *hipImportExternalMemory;
+thipImportExternalSemaphore* hipImportExternalSemaphore;
+thipDestroyExternalSemaphore* hipDestroyExternalSemaphore;
 thipExternalMemoryGetMappedBuffer *hipExternalMemoryGetMappedBuffer;
 thipDestroyExternalMemory *hipDestroyExternalMemory;
+thipSignalExternalSemaphoresAsync* hipSignalExternalSemaphoresAsync;
+thipWaitExternalSemaphoresAsync* hipWaitExternalSemaphoresAsync;
 
 thiprtcGetErrorString* hiprtcGetErrorString;
 thiprtcAddNameExpression* hiprtcAddNameExpression;
@@ -273,7 +278,7 @@ void hipewInit( int* resultDriver, int* resultRtc, hipuint32_t flags )
   /* Library paths. */
 #ifdef _WIN32
   /* Expected in C:/Windows/System32 or similar, no path needed. */
-  const char* hip_paths[] = {"amdhip64.dll", NULL};
+  const char* hip_paths[] = {"amdhip64_6.dll", "amdhip64.dll", NULL};
   const char* hiprtc_paths[] = {
                                 "hiprtc0605.dll",
                                 "hiprtc0604.dll",
@@ -348,6 +353,7 @@ void hipewInit( int* resultDriver, int* resultRtc, hipuint32_t flags )
   HIP_LIBRARY_FIND_CHECKED(hipInit);
   HIP_LIBRARY_FIND_CHECKED(hipDriverGetVersion);
   HIP_LIBRARY_FIND_CHECKED(hipGetDevice);
+  HIP_LIBRARY_FIND_CHECKED(hipSetDevice);
   HIP_LIBRARY_FIND_CHECKED(hipGetDeviceCount);
   HIP_LIBRARY_FIND_CHECKED(hipGetDeviceProperties);
   HIP_LIBRARY_FIND_CHECKED(hipDeviceGet);
@@ -468,10 +474,10 @@ void hipewInit( int* resultDriver, int* resultRtc, hipuint32_t flags )
   HIP_LIBRARY_FIND_CHECKED(hipImportExternalMemory);
   HIP_LIBRARY_FIND_CHECKED(hipExternalMemoryGetMappedBuffer);
   HIP_LIBRARY_FIND_CHECKED(hipDestroyExternalMemory);
-  // HIP_LIBRARY_FIND_CHECKED(hipImportExternalSemaphore);
-  // HIP_LIBRARY_FIND_CHECKED(hipDestroyExternalSemaphore);
-  // HIP_LIBRARY_FIND_CHECKED(hipSignalExternalSemaphoresAsync);
-  // HIP_LIBRARY_FIND_CHECKED(hipWaitExternalSemaphoresAsync);
+  HIP_LIBRARY_FIND_CHECKED(hipImportExternalSemaphore);
+  HIP_LIBRARY_FIND_CHECKED(hipDestroyExternalSemaphore);
+  HIP_LIBRARY_FIND_CHECKED(hipSignalExternalSemaphoresAsync);
+  HIP_LIBRARY_FIND_CHECKED(hipWaitExternalSemaphoresAsync);
 
   s_resultDriver = HIPEW_SUCCESS;
   *resultDriver = s_resultDriver;
