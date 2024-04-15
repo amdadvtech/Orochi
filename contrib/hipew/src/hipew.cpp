@@ -549,13 +549,21 @@ static DynamicLibrary dynamic_library_open_find(const char **paths) {
   return NULL;
 }
 
-/* Implementation function. */
+// Implementation function.
 static void hipewHipExit(void) {
   if (hip_lib != NULL) {
-    /*  Ignore errors. */
+    //  Ignore errors.
     dynamic_library_close(hip_lib);
     hip_lib = NULL;
   }
+
+  if (hiprtc_lib != NULL) {
+    //  Ignore errors.
+    dynamic_library_close(hiprtc_lib);
+    hiprtc_lib = NULL;
+  }
+
+  return;
 }
 
 #ifdef _WIN32
@@ -598,7 +606,10 @@ void hipewInit( int* resultDriver, int* resultRtc, uint32_t flags )
   /* Library paths. */
 #ifdef _WIN32
   /* Expected in C:/Windows/System32 or similar, no path needed. */
-  const char* hip_paths[] = {"amdhip64_6.dll", "amdhip64.dll", NULL};
+  const char* hip_paths[] = {
+                 "amdhip64_6.dll",
+                 "amdhip64.dll", 
+                 NULL};
   const char* hiprtc_paths[] = {
                                 "hiprtc0605.dll",
                                 "hiprtc0604.dll",
