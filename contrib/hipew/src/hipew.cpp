@@ -601,42 +601,84 @@ static int hipewHasOldDriver(const char *hip_path) {
 }
 #endif
 
-void hipewInit( int* resultDriver, int* resultRtc, uint32_t flags )
+
+// description in header
+void hipewInit( int* resultDriver, int* resultRtc, uint32_t flags, const char** customPaths_Hip, const char** customPaths_Hiprtc )
 {
-  /* Library paths. */
+
+  // Search existing HIP libraries.
+  // A general rule is that we search in descending order, starting with the most recent versions.
+  //
+  // The HIP libraries are backward compatible, examples:
+  // - If you are using the 5.7 HIP API, then any library above 5.7 (like 6.0) should be able to run your program correctly.
+  // - However, if you use the 6.0 HIP API, then loading older library (like 5.7) will fail to run API that has been introduced in HIP 6.0.
+  // 
+  // All those fixed paths search can be overridden by the arguments of hipewInit/oroInitialize.
+  // This is important to keep in mind as depending on your project you may want to search in custom order.
+  //
+
 #ifdef _WIN32
-  /* Expected in C:/Windows/System32 or similar, no path needed. */
+  // Expected in C:/Windows/System32 or similar, no path needed.
   const char* hip_paths[] = {
-                 "amdhip64_6.dll",
-                 "amdhip64.dll", 
-                 NULL};
+      "amdhip64_6.dll", 
+      "amdhip64.dll",   // <- hip '5.x' DLL.
+      NULL };
   const char* hiprtc_paths[] = {
-                                "hiprtc0605.dll",
-                                "hiprtc0604.dll",
-                                "hiprtc0603.dll",
-                                "hiprtc0602.dll",
-                                "hiprtc0601.dll",
-                                "hiprtc0600.dll",
-                                "hiprtc0507.dll",  
-                                "hiprtc0506.dll", 
-                                "hiprtc0505.dll", 
-                                "hiprtc0504.dll",
-                                "hiprtc0503.dll",
-                                NULL};
+      "hiprtc0605.dll",
+      "hiprtc0604.dll",
+      "hiprtc0603.dll",
+      "hiprtc0602.dll",
+      "hiprtc0601.dll",
+      "hiprtc0600.dll",
+      "hiprtc0507.dll",  
+      "hiprtc0506.dll", 
+      "hiprtc0505.dll", 
+      "hiprtc0504.dll",
+      "hiprtc0503.dll",
+      NULL };
 #elif defined(__APPLE__)
-  /* Default installation path. */
+  // Default installation path. 
   const char *hip_paths[] = {"", NULL};
   const char* hiprtc_paths[] = { NULL };
 #else
-  const char *hip_paths[] = { "/opt/rocm/hip/lib/libamdhip64.so",
-                              "/opt/rocm/lib/libamdhip64.so", 
-                              "libamdhip64.so",
-                              NULL };
-  const char* hiprtc_paths[] = { "/opt/rocm/hip/lib/libhiprtc.so",
-                                 "/opt/rocm/lib/libhiprtc.so", 
-                                 "libhiprtc.so",
-                                 NULL };
+  const char *hip_paths[] = { 
+
+      // we first try the specific versions
+      "/opt/rocm/hip/lib/libamdhip64.so.6",
+      "/opt/rocm/lib/libamdhip64.so.6", 
+      "libamdhip64.so.6",
+
+      "/opt/rocm/hip/lib/libamdhip64.so.5",
+      "/opt/rocm/lib/libamdhip64.so.5", 
+      "libamdhip64.so.5",
+
+      // .. if it doesn't exist, we take the generic symbolic link.
+      "/opt/rocm/hip/lib/libamdhip64.so",
+      "/opt/rocm/lib/libamdhip64.so", 
+      "libamdhip64.so",
+
+      NULL };
+
+  const char* hiprtc_paths[] = { 
+
+      // we first try the specific versions
+      "/opt/rocm/hip/lib/libhiprtc.so.6",
+      "/opt/rocm/lib/libhiprtc.so.6", 
+      "libhiprtc.so.6",
+
+      "/opt/rocm/hip/lib/libhiprtc.so.5",
+      "/opt/rocm/lib/libhiprtc.so.5", 
+      "libhiprtc.so.5",
+
+      // .. if it doesn't exist, we take the generic symbolic link.
+      "/opt/rocm/hip/lib/libhiprtc.so",
+      "/opt/rocm/lib/libhiprtc.so", 
+      "libhiprtc.so",
+      NULL };
+
 #endif
+
+
   static int initialized = 0;
   static int s_resultDriver = 0;
   static int s_resultRtc = 0;
@@ -660,7 +702,7 @@ void hipewInit( int* resultDriver, int* resultRtc, uint32_t flags )
 
 #ifdef _WIN32
   /* Test for driver version. */
-  if(hipewHasOldDriver(hip_paths[0])) {
+  if(hipewHasOldDriver(customPaths_Hip ? customPaths_Hip[0] : hip_paths[0])) {
     s_resultDriver = HIPEW_ERROR_OLD_DRIVER;
     s_resultRtc = HIPEW_NOT_INITIALIZED;
     *resultDriver = s_resultDriver;
@@ -670,8 +712,8 @@ void hipewInit( int* resultDriver, int* resultRtc, uint32_t flags )
 #endif
 
   /* Load library. */
-  hip_lib = dynamic_library_open_find(hip_paths);
-  hiprtc_lib = dynamic_library_open_find(hiprtc_paths);
+  hip_lib = dynamic_library_open_find(customPaths_Hip ? customPaths_Hip : hip_paths);
+  hiprtc_lib = dynamic_library_open_find(customPaths_Hiprtc ? customPaths_Hiprtc : hiprtc_paths);
 
   if (hip_lib == NULL) {
     s_resultDriver = HIPEW_ERROR_ATEXIT_FAILED;
